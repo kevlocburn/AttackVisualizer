@@ -8,7 +8,8 @@ CREATE TABLE failed_logins (
     country VARCHAR(255),
     latitude FLOAT,
     longitude FLOAT,
-    attempts INTEGER DEFAULT 1
+    attempts INTEGER DEFAULT 1,
+    CONSTRAINT unique_failed_login UNIQUE (timestamp, ip_address, port)
 );
 
 CREATE INDEX idx_ip_address ON failed_logins (ip_address);

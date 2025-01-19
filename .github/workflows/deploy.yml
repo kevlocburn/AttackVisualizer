@@ -1,62 +1,122 @@
-name: Deploy Application
+name: Deploy AttackVisualizer
 
 on:
-  workflow_dispatch:
-  #push:
-    # branches:
-    #   - main
+  push:
+    branches:
+      - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.8'
-
-      - name: Install backend dependencies
-        run: |
-          cd backend
-          pip install -r requirements.txt
-
-      - name: Run backend migrations
-        run: |
-          cd backend
-          alembic upgrade head
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm install
-          npm run build
-
       - name: Add SSH key
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          log-public-key: false
 
-      - name: Set up Docker Compose
-        run: |
-          docker-compose -f database/docker-compose.yml up -d
-        env:
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      - name: Add DigitalOcean server to known hosts
+        run: ssh-keyscan -H 159.65.37.6 >> ~/.ssh/known_hosts
 
-      - name: Run log scraper
+      - name: Configure and activate log scraper
         run: |
-          python backend/scripts/parse_export_ips.py
-        env:
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ssh root@159.65.37.6 << EOF
+          # Only create the service and timer if they don't exist
+          if [ ! -f /etc/systemd/system/log_scraper.service ]; then
+            cat <<EOL > /etc/systemd/system/log_scraper.service
+            [Unit]
+            Description=Run the AttackVisualizer log scraper
+
+            [Service]
+            ExecStart=/usr/bin/python3 /home/AttackVisualizer/backend/scripts/log_scraper.py
+            Environment="POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+            Environment="POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+            Environment="POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+            Restart=always
+            EOL
+          fi
+
+          if [ ! -f /etc/systemd/system/log_scraper.timer ]; then
+            cat <<EOL > /etc/systemd/system/log_scraper.timer
+            [Unit]
+            Description=Run log scraper every 10 minutes
+
+            [Timer]
+            OnBootSec=10min
+            OnUnitActiveSec=10min
+            Unit=log_scraper.service
+
+            [Install]
+            WantedBy=timers.target
+            EOL
+          fi
+
+          # Reload systemd to apply the new service and timer
+          systemctl daemon-reload
+
+          # Enable and start the timer
+          systemctl enable log_scraper.timer
+          systemctl start log_scraper.timer
+          EOF
 
       - name: Deploy to server
+        env:
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
-          echo "Deploying application..."
+          ssh root@159.65.37.6 << EOF
+          git clone https://github.com/kevlocburn/AttackVisualizer.git /home/AttackVisualizer || (cd /home/AttackVisualizer && git pull)
+          cd /home/AttackVisualizer
+          docker-compose down
+          docker-compose up -d --build
+
+          # Ensure Nginx is configured
+          cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
+          server {
+              listen 80;
+              server_name hack.kevinlockburner.com;
+
+              # Redirect all HTTP to HTTPS
+              return 301 https://\$host\$request_uri;
+          }
+
+          server {
+              listen 443 ssl;
+              server_name hack.kevinlockburner.com;
+
+              ssl_certificate /etc/letsencrypt/live/hack.kevinlockburner.com/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/hack.kevinlockburner.com/privkey.pem;
+
+              # SSL security settings
+              ssl_protocols TLSv1.2 TLSv1.3;
+              ssl_ciphers HIGH:!aNULL:!MD5;
+              ssl_prefer_server_ciphers on;
+
+              location /api/ {
+                  proxy_pass http://localhost:8000/;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+
+              location / {
+                  proxy_pass http://localhost:3000/;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+          EOL
+
+          # Test and reload Nginx
+          nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
+
+          # Restart scraper timer
+          systemctl restart log_scraper.timer
+          EOF

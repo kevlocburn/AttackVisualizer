@@ -1,9 +1,11 @@
 import os
-import re
 import psycopg2
 import csv
 import json
+import requests
 from dotenv import load_dotenv
+from datetime import datetime
+import time
 
 # Load environment variables from .env
 load_dotenv()
@@ -17,79 +19,102 @@ DB_CONFIG = {
     "port": 5432,
 }
 
-# Regex pattern to extract failed login details
-LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: invalid user)? (.*?) from ([\d.]+) port (\d+)"
+# Geolocation API
+GEO_API_URL = "http://ip-api.com/json/{ip}"
+GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
 
-# File paths
-LOG_FILE = r"C:\logs\auth.log"  # Raw string for Windows paths
-EXPORT_CSV = "failed_logins.csv"
-EXPORT_JSON = "failed_logins.json"
+def load_failed_logins(file_path, file_format):
+    """Load failed login data from CSV or JSON."""
+    try:
+        if file_format == "csv":
+            with open(file_path, "r") as file:
+                reader = csv.DictReader(file)
+                return [row for row in reader]
+        elif file_format == "json":
+            with open(file_path, "r") as file:
+                return json.load(file)
+    except Exception as e:
+        print(f"Error loading file {file_path}: {e}")
+        return []
 
-def parse_logs():
-    """Parse /var/log/auth.log and extract failed login attempts."""
-    parsed_data = []
-
-    with open(LOG_FILE, "r") as file:
-        for line in file:
-            match = re.search(LOG_PATTERN, line)
-            if match:
-                timestamp, user, ip_address, port = match.groups()
-                parsed_data.append({
-                    "timestamp": timestamp,
-                    "ip_address": ip_address,
-                    "port": int(port),
-                })
-
-    return parsed_data
+def resolve_geolocation(ip_address):
+    """Resolve geolocation information for an IP address with retries."""
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = requests.get(
+                GEO_API_URL.format(ip=ip_address),
+                params={"fields": GEO_API_FIELDS},
+                timeout=5
+            )
+            if response.ok:
+                data = response.json()
+                if data.get("status") == "success":
+                    return {
+                        "country": data.get("country"),
+                        "region": data.get("regionName"),
+                        "city": data.get("city"),
+                        "latitude": data.get("lat"),
+                        "longitude": data.get("lon"),
+                    }
+            elif response.status_code == 429:
+                print(f"Rate limited for IP {ip_address}, retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                print(f"Failed API request for IP {ip_address}, Status Code: {response.status_code}")
+                break
+        except Exception as e:
+            print(f"Error resolving geolocation for IP {ip_address}: {e}")
+    return {}
 
 def insert_into_db(data):
-    """Insert parsed data into the database."""
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
+    """Insert data into the database."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
 
-        for entry in data:
+    for entry in data:
+        try:
+            timestamp = datetime.strptime(entry["timestamp"], "%b %d %H:%M:%S").replace(year=datetime.now().year)
+
+            geo_data = resolve_geolocation(entry["ip_address"])
+            time.sleep(1)  # Increased delay to avoid rate limits
+
             cursor.execute(
                 """
-                INSERT INTO failed_logins (timestamp, ip_address, port)
-                VALUES (%s, %s, %s)
-                ON CONFLICT DO NOTHING;
+                INSERT INTO failed_logins (timestamp, ip_address, port, city, region, country, latitude, longitude)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (timestamp, ip_address, port) DO NOTHING;
                 """,
-                (entry["timestamp"], entry["ip_address"], entry["port"]),
+                (
+                    timestamp,
+                    entry["ip_address"],
+                    int(entry["port"]),
+                    geo_data.get("city"),
+                    geo_data.get("region"),
+                    geo_data.get("country"),
+                    geo_data.get("latitude"),
+                    geo_data.get("longitude"),
+                ),
             )
+            conn.commit()
+            print(f"Inserted entry: {entry}")
 
-        conn.commit()
-    except Exception as e:
-        print(f"Error inserting data into database: {e}")
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
+        except Exception as e:
+            print(f"Error inserting entry {entry}: {e}")
+            conn.rollback()
 
-def export_to_csv(data):
-    """Export parsed data to a CSV file."""
-    with open(EXPORT_CSV, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=["timestamp", "ip_address", "port"])
-        writer.writeheader()
-        writer.writerows(data)
-
-def export_to_json(data):
-    """Export parsed data to a JSON file."""
-    with open(EXPORT_JSON, "w") as jsonfile:
-        json.dump(data, jsonfile, indent=4)
+    cursor.close()
+    conn.close()
 
 if __name__ == "__main__":
-    # Step 1: Parse logs
-    parsed_data = parse_logs()
-    print(f"Parsed {len(parsed_data)} failed login attempts.")
+    file_format = "csv"
+    file_path = r"C:\repos\AttackVisualizer\backend\scripts\failed_logins.csv"
 
-    # Step 2: Insert into database
-    insert_into_db(parsed_data)
-    print("Inserted data into the database.")
+    failed_logins = load_failed_logins(file_path, file_format)
 
-    # Step 3: Export data
-    export_to_csv(parsed_data)
-    print(f"Data exported to {EXPORT_CSV}.")
-    export_to_json(parsed_data)
-    print(f"Data exported to {EXPORT_JSON}.")
+    if failed_logins:
+        print(f"Loaded {len(failed_logins)} failed login attempts.")
+        insert_into_db(failed_logins)
+        print("Data successfully inserted into the database.")
+    else:
+        print("No data loaded. Check the input file.")
