@@ -13,10 +13,6 @@ services:
     restart: unless-stopped
 
   api:
-    resources:
-      limits:
-        cpus: '0.5'
-        memory: '512M'
     build:
       context: ./backend
       dockerfile: Dockerfile.api
@@ -32,10 +28,6 @@ services:
     restart: unless-stopped  
 
   frontend:
-    resources:
-      limits:
-        cpus: '0.5'
-        memory: '512M'
     build:
       context: ./frontend
     container_name: attack_visualizer_frontend
