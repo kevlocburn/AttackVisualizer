@@ -24,7 +24,7 @@ jobs:
 
       - name: Configure and activate log scraper
         run: |
-          ssh root@${{ secrets.DO_IP }} << 'EOF'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=10 root@${{ secrets.DO_IP }} << 'EOF'
           # Create the service and timer files
           [ ! -f /etc/systemd/system/log_scraper.service ] && cat <<EOL > /etc/systemd/system/log_scraper.service
           [Unit]
@@ -63,7 +63,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: |
-          ssh -T root@${{ secrets.DO_IP }} << 'EOF'
+          ssh -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -T root@${{ secrets.DO_IP }} << 'EOF'
           if [ ! -d /home/AttackVisualizer ]; then
             git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
           else
