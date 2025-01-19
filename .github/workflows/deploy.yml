@@ -63,8 +63,13 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
           ssh root@${{ secrets.DO_IP }} << 'EOF'
-          # Clone or pull the repository
-          git clone https://github.com/kevlocburn/AttackVisualizer.git /home/AttackVisualizer || (cd /home/AttackVisualizer && git pull)
+          # Ensure the directory exists
+          if [ ! -d /home/AttackVisualizer ]; then
+            git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
+          else
+            cd /home/AttackVisualizer && git pull
+          fi
+
           cd /home/AttackVisualizer
 
           # Bring down and rebuild the Docker containers
