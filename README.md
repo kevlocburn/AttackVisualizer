@@ -5,12 +5,12 @@ This project is designed to monitor and visualize attacks on a server in real-ti
 ## Project Structure
 
 - **backend/**: Contains Python scripts for log parsing and the API.
-  - **migrations/**: Database migration files (if using Alembic).
+  - **migrations/**: Database migration files 
   - **scripts/**: Log parsing and geolocation scripts.
-  - **api.py**: FastAPI or Flask application.
+  - **api.py**: FastAPI application.
   - **requirements.txt**: Python dependencies.
 
-- **frontend/**: Contains the React or Vue.js application for the interactive map.
+- **frontend/**: Contains the React application for the interactive map.
   - **src/**: Source code for the frontend application.
   - **public/**: Static assets for the frontend application.
   - **package.json**: Frontend project dependencies and configuration.
@@ -28,8 +28,8 @@ This project is designed to monitor and visualize attacks on a server in real-ti
 
 1. **Clone the repository**:
    ```
-   git clone <repository-url>
-   cd my-server-attack-map
+   git clone https://github.com/kevlocburn/AttackVisualizer
+   cd AttackVisualizer
    ```
 
 2. **Backend Setup**:

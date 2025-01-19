@@ -1,9 +1,10 @@
 name: Deploy Application
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+  #push:
+    # branches:
+    #   - main
 
 jobs:
   build:
@@ -34,7 +35,12 @@ jobs:
           npm install
           npm run build
 
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          log-public-key: false
+
       - name: Deploy to server
         run: |
-          # Add your deployment commands here
           echo "Deploying application..."
