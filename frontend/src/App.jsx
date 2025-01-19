@@ -22,7 +22,7 @@ useEffect(() => {
     })
     .then((data) => setLogs(data))
     .catch((error) => console.error("Error fetching logs:", error));
-}, []);
+}, [API_BASE_URL]);
 
   return (
     <div className="app">

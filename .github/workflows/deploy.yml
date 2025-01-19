@@ -22,6 +22,41 @@ jobs:
       - name: Add Known Hosts
         run: ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts
 
+      - name: Configure and activate log scraper
+        run: |
+          ssh root@${{ secrets.DO_IP }} << 'EOF'
+          # Create the service and timer files
+          [ ! -f /etc/systemd/system/log_scraper.service ] && cat <<EOL > /etc/systemd/system/log_scraper.service
+          [Unit]
+          Description=Run the AttackVisualizer log scraper
+
+          [Service]
+          ExecStart=/usr/bin/python3 /home/AttackVisualizer/backend/scripts/log_scraper.py
+          Environment="POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+          Environment="POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+          Environment="POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+          Restart=always
+          EOL
+
+          [ ! -f /etc/systemd/system/log_scraper.timer ] && cat <<EOL > /etc/systemd/system/log_scraper.timer
+          [Unit]
+          Description=Run log scraper every 10 minutes
+
+          [Timer]
+          OnBootSec=10min
+          OnUnitActiveSec=10min
+          Unit=log_scraper.service
+
+          [Install]
+          WantedBy=timers.target
+          EOL
+
+          # Reload systemd and enable/start the timer
+          systemctl daemon-reload
+          systemctl enable log_scraper.timer
+          systemctl start log_scraper.timer
+          EOF
+
       - name: Deploy to Server
         env:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -37,19 +72,13 @@ jobs:
 
           cd /home/AttackVisualizer
 
-          export POSTGRES_USER=${POSTGRES_USER}
-          export POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          export POSTGRES_DB=${POSTGRES_DB}
+          # Create an .env file dynamically
+          echo "POSTGRES_USER=${POSTGRES_USER}" > .env
+          echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env
+          echo "POSTGRES_DB=${POSTGRES_DB}" >> .env
 
-          # Ensure environment variables are passed
-          # POSTGRES_USER=${POSTGRES_USER} \
-          # POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-          # POSTGRES_DB=${POSTGRES_DB} \
+          # Bring down and rebuild the containers
           docker-compose down
-
-          # POSTGRES_USER=${POSTGRES_USER} \
-          # POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
-          # POSTGRES_DB=${POSTGRES_DB} \
           docker-compose up -d --build
 
           # Configure Nginx
@@ -91,6 +120,4 @@ jobs:
           EOL
 
           nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
-
-          systemctl restart log_scraper.timer
           EOF
