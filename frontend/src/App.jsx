@@ -7,14 +7,22 @@ import "./App.css";
 function App() {
   const [logs, setLogs] = useState([]);
   const [highlightIndex, setHighlightIndex] = useState(null);
+  const API_BASE_URL =
+  process.env.NODE_ENV === "production"
+    ? "https://hack.kevinlockburner.com/api" // Production API URL
+    : "http://127.0.0.1:8000"; // Local development API URL
 
-  useEffect(() => {
-    // Fetch logs from the backend
-    fetch("http://127.0.0.1:8000/logs/")
-      .then((response) => response.json())
-      .then((data) => setLogs(data))
-      .catch((error) => console.error("Error fetching logs:", error));
-  }, []);
+useEffect(() => {
+  fetch(`${API_BASE_URL}/logs/`)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+      return response.json();
+    })
+    .then((data) => setLogs(data))
+    .catch((error) => console.error("Error fetching logs:", error));
+}, []);
 
   return (
     <div className="app">
