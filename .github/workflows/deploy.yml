@@ -19,11 +19,11 @@ jobs:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
 
       - name: Add DigitalOcean server to known hosts
-        run: ssh-keyscan -H 159.65.37.6 >> ~/.ssh/known_hosts
+        run: ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts
 
       - name: Configure and activate log scraper
         run: |
-          ssh root@159.65.37.6 << EOF
+          ssh root@${{ secrets.DO_IP }} << EOF
           # Only create the service and timer if they don't exist
           if [ ! -f /etc/systemd/system/log_scraper.service ]; then
             cat <<EOL > /etc/systemd/system/log_scraper.service
