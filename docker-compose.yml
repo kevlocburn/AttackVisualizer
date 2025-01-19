@@ -28,6 +28,10 @@ services:
     restart: unless-stopped  
 
   frontend:
+    resources:
+      limits:
+        cpus: '0.5'
+        memory: '512M'
     build:
       context: ./frontend
     container_name: attack_visualizer_frontend
