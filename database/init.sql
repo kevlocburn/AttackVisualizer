@@ -1,11 +1,15 @@
-CREATE TABLE attacks (
+CREATE TABLE failed_logins (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ NOT NULL,
-    source_ip VARCHAR(45) NOT NULL,
-    attack_type VARCHAR(50) NOT NULL,
-    details TEXT,
-    location GEOGRAPHY(POINT, 4326)
+    ip_address VARCHAR(45) NOT NULL,
+    port INTEGER NOT NULL,
+    city VARCHAR(255),
+    region VARCHAR(255),
+    country VARCHAR(255),
+    latitude FLOAT,
+    longitude FLOAT,
+    attempts INTEGER DEFAULT 1
 );
 
-CREATE INDEX idx_attacks_timestamp ON attacks (timestamp);
-CREATE INDEX idx_attacks_source_ip ON attacks (source_ip);
+CREATE INDEX idx_ip_address ON failed_logins (ip_address);
+CREATE INDEX idx_timestamp ON failed_logins (timestamp);

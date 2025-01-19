@@ -1,0 +1,74 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React
+build/
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+venv.bak/
+*.env
+
+# Docker
+*.log
+docker-compose.override.yml
+.dockerignore
+
+# PostgreSQL
+*.sql
+*.dump
+pgdata/
+
+# General
+*.swp
+*.swo
+.idea/
+.vscode/
+*.iml
+*.log
+*.tmp
+*.bak
+*.old
+*.orig
+*.rej
+*.sublime-project
+*.sublime-workspace
+*.sublime-settings
+*.sublime-metadata
+*.sublime-package
+*.sublime-completions
+*.sublime-snippet
+*.sublime-keymap
+*.sublime-macro
+*.sublime-menu
+*.sublime-theme
+*.sublime-color-scheme
+*.sublime-syntax
+*.sublime-scheme
+*.sublime-build
+*.sublime-project
+*.sublime-workspace
+*.sublime-settings
+*.sublime-metadata
+*.sublime-package
+*.sublime-completions
+*.sublime-snippet
+*.sublime-keymap
+*.sublime-macro
+*.sublime-menu
+*.sublime-theme
+*.sublime-color-scheme
+*.sublime-syntax
+*.sublime-scheme
+*.sublime-build

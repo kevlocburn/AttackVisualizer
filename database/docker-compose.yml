@@ -1,22 +1,15 @@
-version: '3.8'
-
 services:
-  timescaledb:
-    image: timescale/timescaledb:latest-pg12
+  postgres:
+    image: timescale/timescaledb:latest-pg14
     container_name: timescaledb
     environment:
-      - POSTGRES_USER=your_username
-      - POSTGRES_PASSWORD=your_password
-      - POSTGRES_DB=your_database
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
-      - timescaledb_data:/var/lib/postgresql/data
-    networks:
-      - timescale_network
-
+      - pgdata:/var/lib/postgresql/data
 volumes:
-  timescaledb_data:
-
-networks:
-  timescale_network:
+  pgdata:
+    driver: local
