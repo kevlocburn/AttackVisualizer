@@ -23,41 +23,35 @@ jobs:
 
       - name: Configure and activate log scraper
         run: |
-          ssh root@${{ secrets.DO_IP }} << EOF
-          # Only create the service and timer if they don't exist
-          if [ ! -f /etc/systemd/system/log_scraper.service ]; then
-            cat <<EOL > /etc/systemd/system/log_scraper.service
-            [Unit]
-            Description=Run the AttackVisualizer log scraper
+          ssh root@${{ secrets.DO_IP }} << 'EOF'
+          # Create the service and timer files
+          [ ! -f /etc/systemd/system/log_scraper.service ] && cat <<EOL > /etc/systemd/system/log_scraper.service
+          [Unit]
+          Description=Run the AttackVisualizer log scraper
 
-            [Service]
-            ExecStart=/usr/bin/python3 /home/AttackVisualizer/backend/scripts/log_scraper.py
-            Environment="POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
-            Environment="POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
-            Environment="POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
-            Restart=always
-            EOL
-          fi
+          [Service]
+          ExecStart=/usr/bin/python3 /home/AttackVisualizer/backend/scripts/log_scraper.py
+          Environment="POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
+          Environment="POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
+          Environment="POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
+          Restart=always
+          EOL
 
-          if [ ! -f /etc/systemd/system/log_scraper.timer ]; then
-            cat <<EOL > /etc/systemd/system/log_scraper.timer
-            [Unit]
-            Description=Run log scraper every 10 minutes
+          [ ! -f /etc/systemd/system/log_scraper.timer ] && cat <<EOL > /etc/systemd/system/log_scraper.timer
+          [Unit]
+          Description=Run log scraper every 10 minutes
 
-            [Timer]
-            OnBootSec=10min
-            OnUnitActiveSec=10min
-            Unit=log_scraper.service
+          [Timer]
+          OnBootSec=10min
+          OnUnitActiveSec=10min
+          Unit=log_scraper.service
 
-            [Install]
-            WantedBy=timers.target
-            EOL
-          fi
+          [Install]
+          WantedBy=timers.target
+          EOL
 
-          # Reload systemd to apply the new service and timer
+          # Reload systemd and enable/start the timer
           systemctl daemon-reload
-
-          # Enable and start the timer
           systemctl enable log_scraper.timer
           systemctl start log_scraper.timer
           EOF
@@ -68,19 +62,21 @@ jobs:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         run: |
-          ssh root@159.65.37.6 << EOF
+          ssh root@${{ secrets.DO_IP }} << 'EOF'
+          # Clone or pull the repository
           git clone https://github.com/kevlocburn/AttackVisualizer.git /home/AttackVisualizer || (cd /home/AttackVisualizer && git pull)
           cd /home/AttackVisualizer
+
+          # Bring down and rebuild the Docker containers
           docker-compose down
           docker-compose up -d --build
 
-          # Ensure Nginx is configured
+          # Configure Nginx
           cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
           server {
               listen 80;
               server_name hack.kevinlockburner.com;
 
-              # Redirect all HTTP to HTTPS
               return 301 https://\$host\$request_uri;
           }
 
@@ -91,7 +87,6 @@ jobs:
               ssl_certificate /etc/letsencrypt/live/hack.kevinlockburner.com/fullchain.pem;
               ssl_certificate_key /etc/letsencrypt/live/hack.kevinlockburner.com/privkey.pem;
 
-              # SSL security settings
               ssl_protocols TLSv1.2 TLSv1.3;
               ssl_ciphers HIGH:!aNULL:!MD5;
               ssl_prefer_server_ciphers on;
