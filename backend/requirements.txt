@@ -6,5 +6,5 @@ uvicorn
 aiofiles
 python-dotenv
 requests
-psycopg2
+psycopg2-binary
 datetime
