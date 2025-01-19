@@ -1,0 +1,9 @@
+FastAPI
+Flask
+SQLAlchemy
+pandas
+geopy
+uvicorn
+aiofiles
+python-dotenv
+requests
