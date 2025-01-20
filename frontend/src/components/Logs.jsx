@@ -11,11 +11,11 @@ const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
   }, [highlightIndex]);
 
   const formatTimestamp = (timestamp) => {
-    console.log('timestamp:' + timestamp);
+    //console.log('timestamp:' + timestamp);
     const date = new Date(timestamp.includes("Z") ? timestamp : `${timestamp}Z`);
-    console.log("UTC:", date.toISOString());
+    //console.log("UTC:", date.toISOString());
     const localTime = date.toLocaleString();
-    console.log("localtime:", localTime);
+    // console.log("localtime:", localTime);
     return localTime;
   };
 

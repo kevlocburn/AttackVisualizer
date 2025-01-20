@@ -40,7 +40,7 @@ const ChartSection = ({ logs }) => {
 
     const topCountriesSorted = Object.entries(topCountries)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
+      .slice(0, 5);
 
     setTopCountriesData({
       labels: topCountriesSorted.map(([country]) => country),

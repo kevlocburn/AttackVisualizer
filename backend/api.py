@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 from typing import List, Optional
 import psycopg2
 import os
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
+import asyncio
 
 # Load environment variables from .env
 load_dotenv()
@@ -43,6 +44,23 @@ class AttackLog(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_data(self, data: dict):
+        for connection in self.active_connections:
+            await connection.send_json(data)
+
+manager = ConnectionManager()
 
 @app.get("/")
 def read_root():
@@ -161,3 +179,44 @@ def create_log(log: AttackLog):
         return {"message": "Log added successfully", "log": log}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inserting log: {e}")
+
+@app.websocket("/ws/logs")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint to send real-time log data.
+    """
+    await manager.connect(websocket)
+    try:
+        while True:
+            # Fetch the latest log from the database
+            conn = psycopg2.connect(**DB_CONFIG)
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+                FROM failed_logins
+                ORDER BY timestamp DESC
+                LIMIT 1;
+            """)
+            row = cursor.fetchone()
+
+            if row:
+                log = {
+                    "ip_address": row[0],
+                    "timestamp": row[1].strftime("%Y-%m-%d %H:%M:%S"),
+                    "port": row[2],
+                    "city": row[3],
+                    "region": row[4],
+                    "country": row[5],
+                    "latitude": row[6],
+                    "longitude": row[7],
+                }
+                await manager.send_data(log)
+
+            cursor.close()
+            conn.close()
+
+            # Simulate delay between updates
+            await asyncio.sleep(2)
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)

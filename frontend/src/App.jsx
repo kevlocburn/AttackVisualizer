@@ -15,17 +15,44 @@ function App() {
       : "http://127.0.0.1:8000"; // Local development API URL
 
   useEffect(() => {
-    // Fetch logs for the log and chart sections
+    // Fetch initial logs
     fetch(`${API_BASE_URL}/logs/`)
       .then((response) => response.json())
       .then((data) => setLogs(data))
       .catch((error) => console.error("Error fetching logs:", error));
 
-    // Fetch map logs for the map component
+    // Fetch initial map logs
     fetch(`${API_BASE_URL}/maplogs/`)
       .then((response) => response.json())
       .then((data) => setMapLogs(data))
       .catch((error) => console.error("Error fetching map logs:", error));
+
+    // Connect to WebSocket for real-time updates
+    const ws = new WebSocket(
+      process.env.NODE_ENV === "production"
+        ? "wss://hack.kevinlockburner.com/ws/logs"
+        : "ws://127.0.0.1:8000/ws/logs"
+    );
+
+    ws.onmessage = (event) => {
+      const newLog = JSON.parse(event.data);
+
+      // Update state with the new log
+      setLogs((prevLogs) => [newLog, ...prevLogs].slice(0, 100)); // Limit to 100 logs
+      setMapLogs((prevMapLogs) => [newLog, ...prevMapLogs].slice(0, 100)); // Limit to 100 logs
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("WebSocket connection closed.");
+    };
+
+    return () => {
+      ws.close();
+    };
   }, [API_BASE_URL]);
 
   return (
