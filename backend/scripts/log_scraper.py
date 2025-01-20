@@ -77,13 +77,17 @@ def resolve_geolocation(ip_address):
     return {}
 
 def insert_into_db(data):
-    """Insert parsed data into the database."""
+    """Insert data into the database."""
     conn = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
 
     for entry in data:
         try:
+            timestamp = datetime.strptime(entry["timestamp"], "%b %d %H:%M:%S").replace(year=datetime.now().year)
+
             geo_data = resolve_geolocation(entry["ip_address"])
+            time.sleep(1)  # Increased delay to avoid rate limits
+
             cursor.execute(
                 """
                 INSERT INTO failed_logins (timestamp, ip_address, port, city, region, country, latitude, longitude)
@@ -91,9 +95,9 @@ def insert_into_db(data):
                 ON CONFLICT (timestamp, ip_address, port) DO NOTHING;
                 """,
                 (
-                    entry["timestamp"],
+                    timestamp,
                     entry["ip_address"],
-                    entry["port"],
+                    int(entry["port"]),
                     geo_data.get("city"),
                     geo_data.get("region"),
                     geo_data.get("country"),
@@ -101,10 +105,13 @@ def insert_into_db(data):
                     geo_data.get("longitude"),
                 ),
             )
+            conn.commit()
+            print(f"Inserted entry: {entry}")
+
         except Exception as e:
             print(f"Error inserting entry {entry}: {e}")
+            conn.rollback()
 
-    conn.commit()
     cursor.close()
     conn.close()
 
