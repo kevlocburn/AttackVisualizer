@@ -66,10 +66,12 @@ def read_logs():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-            FROM failed_logins           
-            ORDER BY timestamp DESC
-            LIMIT 100;
+            SELECT DISTINCT ON (city)
+                ip_address, timestamp, port, city, region, country, latitude, longitude
+            FROM failed_logins
+            WHERE city IS NOT NULL
+            ORDER BY city, timestamp DESC
+            LIMIT 500;
         """)
         rows = cursor.fetchall()
 
