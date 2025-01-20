@@ -4,7 +4,7 @@ import psycopg2
 import requests
 import time
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Load environment variables from .env
 load_dotenv()
@@ -14,8 +14,8 @@ DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
-    "host": "127.0.0.1",  # Host refers to localhost where TimescaleDB is accessible
-    "port": 5432,  # TimescaleDB default port
+    "host": "127.0.0.1",
+    "port": 5432,
 }
 
 # Regex pattern to extract failed login details
@@ -26,7 +26,7 @@ GEO_API_URL = "http://ip-api.com/json/{ip}"
 GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
 
 # File path and check interval
-LOG_FILE = "/var/log/auth.log"  # Ensure the file exists on the host
+LOG_FILE = "/var/log/auth.log"
 CHECK_INTERVAL = 60  # Check every 60 seconds
 
 
@@ -39,7 +39,9 @@ def parse_new_logs(last_timestamp):
                 match = re.search(LOG_PATTERN, line)
                 if match:
                     timestamp_str, user, ip_address, port = match.groups()
-                    timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(year=datetime.now().year)
+                    timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
+                        year=datetime.now().year, tzinfo=timezone.utc
+                    )
 
                     if not last_timestamp or timestamp > last_timestamp:
                         parsed_data.append({
@@ -74,7 +76,7 @@ def resolve_geolocation(ip_address):
                     }
             elif response.status_code == 429:
                 print(f"Rate limited for IP {ip_address}, retrying...")
-                time.sleep(2 ** attempt)  # Exponential backoff
+                time.sleep(2 ** attempt)
             else:
                 print(f"Failed API request for IP {ip_address}, Status Code: {response.status_code}")
                 break
@@ -91,7 +93,7 @@ def insert_into_db(data):
     for entry in data:
         try:
             geo_data = resolve_geolocation(entry["ip_address"])
-            time.sleep(1)  # Added delay to avoid rate limits
+            time.sleep(1)
 
             cursor.execute(
                 """
@@ -129,7 +131,7 @@ def get_last_processed_timestamp():
     result = cursor.fetchone()
     cursor.close()
     conn.close()
-    return result[0] if result[0] else None
+    return result[0].replace(tzinfo=timezone.utc) if result[0] else None
 
 
 if __name__ == "__main__":
