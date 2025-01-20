@@ -1,9 +1,11 @@
 name: Deploy AttackVisualizer
 
 on:
-  push:
-    branches:
-      - main
+  #Manuel trigger for now
+  workflow_dispatch:
+  #push:
+    # branches:
+    #   - main
 
 jobs:
   deploy:
@@ -52,7 +54,7 @@ jobs:
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
           docker-compose up -d --build
-          
+
           # Configure Nginx
           cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
           server {

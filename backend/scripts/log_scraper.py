@@ -4,6 +4,7 @@ import psycopg2
 import requests
 import time
 from dotenv import load_dotenv
+from datetime import datetime  # Ensure datetime is imported
 
 # Load environment variables from .env
 load_dotenv()
@@ -13,8 +14,8 @@ DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
-    "host": "localhost", #timescaledb
-    "port": 5432,
+    "host": "127.0.0.1",  # Host refers to the localhost where TimescaleDB is accessible
+    "port": 5432,  # TimescaleDB default port
 }
 
 # Regex pattern to extract failed login details
@@ -25,26 +26,29 @@ GEO_API_URL = "http://ip-api.com/json/{ip}"
 GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
 
 # File path and check interval
-LOG_FILE = "/var/log/auth.log"
+LOG_FILE = "/var/log/auth.log"  # Ensure the file exists on the host
 CHECK_INTERVAL = 60  # Check every 60 seconds
+
 
 def parse_new_logs(last_timestamp):
     """Parse new entries in the log file after the last processed timestamp."""
     parsed_data = []
-
-    with open(LOG_FILE, "r") as file:
-        for line in file:
-            match = re.search(LOG_PATTERN, line)
-            if match:
-                timestamp, user, ip_address, port = match.groups()
-                if timestamp > last_timestamp:  # Only process new entries
-                    parsed_data.append({
-                        "timestamp": timestamp,
-                        "ip_address": ip_address,
-                        "port": int(port),
-                    })
-
+    try:
+        with open(LOG_FILE, "r") as file:
+            for line in file:
+                match = re.search(LOG_PATTERN, line)
+                if match:
+                    timestamp, user, ip_address, port = match.groups()
+                    if not last_timestamp or timestamp > last_timestamp:
+                        parsed_data.append({
+                            "timestamp": timestamp,
+                            "ip_address": ip_address,
+                            "port": int(port),
+                        })
+    except FileNotFoundError:
+        print(f"Log file not found: {LOG_FILE}")
     return parsed_data
+
 
 def resolve_geolocation(ip_address):
     """Resolve geolocation information for an IP address with retries."""
@@ -76,6 +80,7 @@ def resolve_geolocation(ip_address):
             print(f"Error resolving geolocation for IP {ip_address}: {e}")
     return {}
 
+
 def insert_into_db(data):
     """Insert data into the database."""
     conn = psycopg2.connect(**DB_CONFIG)
@@ -83,10 +88,11 @@ def insert_into_db(data):
 
     for entry in data:
         try:
+            # Parse timestamp and add the current year
             timestamp = datetime.strptime(entry["timestamp"], "%b %d %H:%M:%S").replace(year=datetime.now().year)
 
             geo_data = resolve_geolocation(entry["ip_address"])
-            time.sleep(1)  # Increased delay to avoid rate limits
+            time.sleep(1)  # Added delay to avoid rate limits
 
             cursor.execute(
                 """
@@ -97,7 +103,7 @@ def insert_into_db(data):
                 (
                     timestamp,
                     entry["ip_address"],
-                    int(entry["port"]),
+                    entry["port"],
                     geo_data.get("city"),
                     geo_data.get("region"),
                     geo_data.get("country"),
@@ -115,6 +121,7 @@ def insert_into_db(data):
     cursor.close()
     conn.close()
 
+
 def get_last_processed_timestamp():
     """Retrieve the most recent timestamp processed."""
     conn = psycopg2.connect(**DB_CONFIG)
@@ -124,6 +131,7 @@ def get_last_processed_timestamp():
     cursor.close()
     conn.close()
     return result[0] if result[0] else ""
+
 
 if __name__ == "__main__":
     print("Starting log scraper...")
