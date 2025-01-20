@@ -3,7 +3,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-ant-path";
 
-const serverLocation = [40.8586, -74.1636]; 
+const serverLocation = [40.8586, -74.1636]; // Server location
 
 const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
   const highlightedLine = useRef(null); 
@@ -12,7 +12,6 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
 
   useEffect(() => {
     if (!mapRef.current) {
-
       const map = L.map("map", {
         minZoom: 2,
         dragging: true,
@@ -25,12 +24,11 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
 
       mapRef.current = map;
 
-
       L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
         attribution: "© OpenStreetMap contributors © CARTO",
       }).addTo(map);
 
-      // server marker
+      // Server marker
       L.circle(serverLocation, {
         color: "red",
         fillColor: "#ff4d4d",
@@ -42,16 +40,9 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
       mapLogs.forEach((log, index) => {
         const sourceLatLng = [log.latitude, log.longitude];
 
-        // check correct coordinates
-        if (
-          sourceLatLng[0] !== null &&
-          sourceLatLng[1] !== null &&
-          !isNaN(sourceLatLng[0]) &&
-          !isNaN(sourceLatLng[1])
-        ) {
+        if (sourceLatLng[0] !== null && sourceLatLng[1] !== null) {
           const attackCount = log.attempts || 1;
 
-          // attack marker
           const marker = L.circle(sourceLatLng, {
             color: "yellow",
             fillColor: "#ffff4d",
@@ -59,7 +50,6 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
             radius: 30000 * Math.min(attackCount, 10), 
           }).addTo(map);
 
-          // animated line connecting to the server
           const line = L.polyline.antPath([sourceLatLng, serverLocation], {
             delay: 300,
             color: "orange",
@@ -68,15 +58,12 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
             pulseColor: "#ffcc00",
           }).addTo(map);
 
-          linesRef.current[index] = line; 
+          linesRef.current[index] = line;
 
-          // click events to highlight the log entry and line
           const onClick = () => {
-            highlightLog(index); // highlight the log entry
+            highlightLog(index);
 
-            // Highlight the line
             if (highlightedLine.current) {
-              // Reset the previous highlighted line
               highlightedLine.current.setStyle({
                 color: "orange",
                 weight: 3,
@@ -84,14 +71,13 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
               });
             }
 
-            // highlighted line
             line.setStyle({
               color: "red",
               weight: 7,
               opacity: 1,
             });
 
-            highlightedLine.current = line; 
+            highlightedLine.current = line;
           };
 
           marker.on("click", onClick);
@@ -100,7 +86,6 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
       });
     }
 
-    // highlight the line corresponding to the selected log entry
     if (highlightIndex !== null && linesRef.current[highlightIndex]) {
       if (highlightedLine.current) {
         highlightedLine.current.setStyle({
@@ -119,14 +104,13 @@ const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
       highlightedLine.current = line;
     }
 
-
     return () => {
       if (mapRef.current) {
-        mapRef.current.remove(); 
-        mapRef.current = null; 
+        mapRef.current.remove();
+        mapRef.current = null;
       }
     };
-  }, [mapLogs, highlightLog, highlightIndex]); // Re-run the effect when maplogs or highlightIndex change
+  }, [mapLogs, highlightLog, highlightIndex]);
 
   return <div id="map" style={{ height: "100%", width: "100%" }}></div>;
 };

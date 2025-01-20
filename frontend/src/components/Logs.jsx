@@ -1,32 +1,30 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import "./Logs.css";
 
-const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
+const Logs = ({ mapLogs, highlightIndex, onLogClick }) => {
   const logRefs = useRef([]);
 
   useEffect(() => {
-    // scroll to the highlighted log
     if (highlightIndex !== null && logRefs.current[highlightIndex]) {
       logRefs.current[highlightIndex].scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [highlightIndex]);
 
-  // convert UTC timestamp to local time
   const formatTimestamp = (timestamp) => {
-    const date = new Date(timestamp); // parse the UTC timestamp
-    return date.toLocaleString(); // convert to local time
+    const date = new Date(timestamp);
+    return date.toLocaleString();
   };
 
   return (
     <div className="logs">
       <h2>Attack Logs</h2>
       <div className="log-list">
-        {maplogs.map((log, index) => (
+        {mapLogs.map((log, index) => (
           <div
             key={index}
-            ref={(el) => (logRefs.current[index] = el)} // save each log entry ref
-            className={`log-entry ${highlightIndex === index ? "highlight" : ""}`} s
-            onClick={() => onLogClick(index)} // highlight line on click
+            ref={(el) => (logRefs.current[index] = el)}
+            className={`log-entry ${highlightIndex === index ? "highlight" : ""}`}
+            onClick={() => onLogClick(index)}
           >
             <p>
               <strong>IP:</strong> {log.ip_address}
