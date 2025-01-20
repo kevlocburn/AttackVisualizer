@@ -67,9 +67,9 @@ def read_logs():
 
         cursor.execute("""
             SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-            FROM failed_logins
-            LIMIT 100           
-            ORDER BY timestamp DESC;
+            FROM failed_logins           
+            ORDER BY timestamp DESC
+            LIMIT 100;
         """)
         rows = cursor.fetchall()
 
