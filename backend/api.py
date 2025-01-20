@@ -180,7 +180,7 @@ def create_log(log: AttackLog):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error inserting log: {e}")
 
-@app.websocket("/ws/logs")
+@app.websocket("/ws/maplogs")
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint to send real-time log data.
@@ -193,11 +193,26 @@ async def websocket_endpoint(websocket: WebSocket):
             cursor = conn.cursor()
 
             cursor.execute("""
-                SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+            WITH ranked_entries AS (
+                SELECT 
+                    ip_address, 
+                    timestamp, 
+                    port, 
+                    city, 
+                    region, 
+                    country, 
+                    latitude, 
+                    longitude,
+                    ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
                 FROM failed_logins
-                ORDER BY timestamp DESC
-                LIMIT 1;
-            """)
+                WHERE city IS NOT NULL
+            )
+            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+            FROM ranked_entries
+            WHERE rank <= 2
+            ORDER BY timestamp DESC
+            LIMIT 100;
+        """)
             row = cursor.fetchone()
 
             if row:

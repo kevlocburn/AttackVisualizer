@@ -30,8 +30,8 @@ function App() {
     // Connect to WebSocket for real-time updates
     const ws = new WebSocket(
       process.env.NODE_ENV === "production"
-        ? "wss://hack.kevinlockburner.com/ws/logs"
-        : "ws://127.0.0.1:8000/ws/logs"
+        ? "wss://hack.kevinlockburner.com/ws/maplogs"
+        : "ws://127.0.0.1:8000/ws/maplogs"
     );
 
     ws.onmessage = (event) => {

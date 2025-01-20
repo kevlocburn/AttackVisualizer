@@ -134,19 +134,19 @@ def get_last_processed_timestamp():
     return result[0].replace(tzinfo=timezone.utc) if result[0] else None
 
 
-def main():
+if __name__ == "__main__":
     print("Starting log scraper...")
-    if not os.path.exists(LOG_FILE):
-        print(f"Log file not found: {LOG_FILE}")
-        return
 
-    with open(LOG_FILE, "r") as f:
-        logs = f.readlines()
+    try:
+        last_timestamp = get_last_processed_timestamp()
+        new_logs = parse_new_logs(last_timestamp)
+        print(f"Found {len(new_logs)} new log entries.")
 
-    print(f"Found {len(logs)} log entries.")
-    # Add processing logic here
+        if new_logs:
+            insert_into_db(new_logs)
+            print(f"Inserted {len(new_logs)} new entries into the database.")
+
+    except Exception as e:
+        print(f"Error: {e}")
 
     print("Log scraper completed.")
-
-if __name__ == "__main__":
-    main()
