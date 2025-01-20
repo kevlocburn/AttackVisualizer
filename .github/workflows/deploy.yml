@@ -3,37 +3,31 @@ name: Deploy AttackVisualizer
 on:
   workflow_dispatch:
   push:
-     branches:
-       - main
+    branches:
+      - main
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout the Latest Code
       - name: Checkout Code
         uses: actions/checkout@v2
 
+      # Step 2: Add SSH Key for Deployment
       - name: Add SSH Key
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          log-public-key: true
+          log-public-key: false
 
+      # Step 3: Add Server to Known Hosts
       - name: Add Known Hosts
         run: ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts
-      
-      - name: Debug Secrets
-        run: |
-          echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}"
-          echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}"
-          echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}"
 
-      - name: Build and Deploy
-        env:
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+      # Step 4: Pull the Latest Code on the Server
+      - name: Pull Latest Code on Server
         run: |
           ssh root@${{ secrets.DO_IP }} << 'EOF'
           if [ ! -d /home/AttackVisualizer ]; then
@@ -41,18 +35,50 @@ jobs:
           else
             cd /home/AttackVisualizer && git pull
           fi
+          EOF
 
+      # Step 5: Build Docker Images Locally (With Latest Code)
+      - name: Build Docker Images
+        run: |
+          docker build -t attackvisualizer-frontend:latest -f ./frontend/Dockerfile ./frontend
+          docker build -t attackvisualizer-api:latest -f ./backend/Dockerfile.api ./backend
+
+      # Step 6: Save Docker Images Locally
+      - name: Save Docker Images
+        run: |
+          docker save attackvisualizer-frontend:latest | gzip > frontend.tar.gz
+          docker save attackvisualizer-api:latest | gzip > api.tar.gz
+
+      # Step 7: Transfer Docker Images to Server
+      - name: Transfer Docker Images
+        run: |
+          scp frontend.tar.gz api.tar.gz root@${{ secrets.DO_IP }}:/root/
+
+      # Step 8: Deploy on Server
+      - name: Deploy Docker Images on Server
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        run: |
+          ssh root@${{ secrets.DO_IP }} << 'EOF'
           cd /home/AttackVisualizer
 
-          export POSTGRES_USER=${{ secrets.POSTGRES_USER }}
-          export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          export POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          # Load Docker Images
+          gunzip -c /root/frontend.tar.gz | docker load
+          gunzip -c /root/api.tar.gz | docker load
 
+          # Clean up tar.gz files after loading images
+          rm -f /root/frontend.tar.gz /root/api.tar.gz
+
+          # Bring Down Old Containers
           docker-compose down
+
+          # Deploy Updated Images
           POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
-          docker-compose up -d --build
+          docker-compose up -d
 
           # Configure Nginx
           cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
@@ -94,6 +120,3 @@ jobs:
 
           nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
           EOF
-    
-
-

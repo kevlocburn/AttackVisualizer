@@ -1,6 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { Bar, Line } from "react-chartjs-2";
-import { Chart as ChartJS, BarElement, CategoryScale, LinearScale, Title, Tooltip, Legend, LineElement, PointElement } from "chart.js";
+import { Bar, Line, Radar } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  BarElement,
+  CategoryScale,
+  LinearScale,
+  Title,
+  Tooltip,
+  Legend,
+  LineElement,
+  PointElement,
+  RadialLinearScale,
+} from "chart.js";
 
 ChartJS.register(
   BarElement,
@@ -10,15 +21,17 @@ ChartJS.register(
   Tooltip,
   Legend,
   LineElement,
-  PointElement
+  PointElement,
+  RadialLinearScale
 );
 
 const ChartSection = ({ logs }) => {
   const [topCountriesData, setTopCountriesData] = useState(null);
   const [attackTrendsData, setAttackTrendsData] = useState(null);
+  const [timeOfDayData, setTimeOfDayData] = useState(null);
 
   useEffect(() => {
-    // data for "Top Attack Sources (Country)"
+    // "Top Attack Sources (Country)"
     const topCountries = logs.reduce((acc, log) => {
       const key = log.country || "Unknown";
       acc[key] = (acc[key] || 0) + 1;
@@ -27,7 +40,7 @@ const ChartSection = ({ logs }) => {
 
     const topCountriesSorted = Object.entries(topCountries)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10); // top 10 countries
+      .slice(0, 10);
 
     setTopCountriesData({
       labels: topCountriesSorted.map(([country]) => country),
@@ -42,9 +55,9 @@ const ChartSection = ({ logs }) => {
       ],
     });
 
-    // data for "Attack Trends"
+    // "Attack Trends Over Time"
     const trends = logs.reduce((acc, log) => {
-      const date = new Date(log.timestamp).toLocaleDateString(); // group by date
+      const date = new Date(log.timestamp).toLocaleDateString();
       acc[date] = (acc[date] || 0) + 1;
       return acc;
     }, {});
@@ -63,6 +76,26 @@ const ChartSection = ({ logs }) => {
         },
       ],
     });
+
+    // "Attack Distribution by Time of Day"
+    const hours = new Array(24).fill(0); // Array for 24 hours
+    logs.forEach((log) => {
+      const hour = new Date(log.timestamp).getHours(); // Extract hour
+      hours[hour]++;
+    });
+
+    setTimeOfDayData({
+      labels: Array.from({ length: 24 }, (_, i) => `${i}:00 - ${i + 1}:00`),
+      datasets: [
+        {
+          label: "Number of Attacks",
+          data: hours,
+          backgroundColor: "rgba(153, 102, 255, 0.6)",
+          borderColor: "rgba(153, 102, 255, 1)",
+          borderWidth: 1,
+        },
+      ],
+    });
   }, [logs]);
 
   return (
@@ -74,6 +107,10 @@ const ChartSection = ({ logs }) => {
       <div>
         <h3>Attack Trends Over Time</h3>
         {attackTrendsData ? <Line data={attackTrendsData} options={{ responsive: true }} /> : <p>Loading...</p>}
+      </div>
+      <div>
+        <h3>Attack Distribution by Time of Day</h3>
+        {timeOfDayData ? <Bar data={timeOfDayData} options={{ responsive: true, indexAxis: "y" }} /> : <p>Loading...</p>}
       </div>
     </div>
   );
