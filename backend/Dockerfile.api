@@ -13,11 +13,11 @@ COPY . .
 RUN apt-get update && apt-get install -y cron && apt-get install -y nano
 
 # Add cron job for log scraper
-RUN echo "*/10 * * * * env POSTGRES_USER=${POSTGRES_USER} POSTGRES_PASSWORD=${POSTGRES_PASSWORD} POSTGRES_DB=${POSTGRES_DB} python3 /app/scripts/log_scraper_docker.py >> /var/log/log_scraper.log 2>&1" > /etc/cron.d/log_scraper
-RUN chmod 0644 /etc/cron.d/log_scraper
+RUN echo "*/10 * * * * env POSTGRES_USER=${POSTGRES_USER} POSTGRES_PASSWORD=${POSTGRES_PASSWORD} POSTGRES_DB=${POSTGRES_DB} python3 /app/scripts/log_scraper_docker.py >> /var/log/log_scraper_docker.py 2>&1" > /etc/cron.d/log_scraper_docker
+RUN chmod 0644 /etc/cron.d/log_scraper_docker
 
 # Apply cron job
-RUN crontab /etc/cron.d/log_scraper
+RUN crontab /etc/cron.d/log_scraper_docker
 
 # Expose FastAPI port
 EXPOSE 8000
