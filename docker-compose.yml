@@ -9,9 +9,15 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/
+      - pgdata:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
+    command: >
+      bash -c "echo 'POSTGRES_USER=${POSTGRES_USER}';
+               echo 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}';
+               echo 'POSTGRES_DB=${POSTGRES_DB}';
+               sleep 30;
+               docker-entrypoint.sh postgres"
 
   api:
     build:
@@ -26,7 +32,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "8000:8000"
-    restart: unless-stopped  
+    restart: unless-stopped
+    command: >
+      bash -c "echo 'POSTGRES_USER=${POSTGRES_USER}';
+               echo 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}';
+               echo 'POSTGRES_DB=${POSTGRES_DB}';
+               uvicorn api:app --host 0.0.0.0 --port 8000"
 
   frontend:
     build:
@@ -35,6 +46,8 @@ services:
     ports:
       - "3000:80"
     restart: unless-stopped
+    command: >
+      bash -c "echo 'Starting frontend...'; nginx -g 'daemon off;'"
 
 volumes:
   pgdata:

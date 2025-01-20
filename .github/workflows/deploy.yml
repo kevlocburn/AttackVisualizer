@@ -37,11 +37,18 @@ jobs:
 
           cd /home/AttackVisualizer
 
+          echo "POSTGRES_USER=${POSTGRES_USER}"
+          echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+          echo "POSTGRES_DB=${POSTGRES_DB}"
+
+          # Create an .env file dynamically (for debugging)
+          echo "POSTGRES_USER=${POSTGRES_USER}" > .env
+          echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env
+          echo "POSTGRES_DB=${POSTGRES_DB}" >> .env
+          cat .env  # Verify the file content
+
           # Build and tag the Docker images locally
-          docker-compose build \
-            --build-arg POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
-            --build-arg POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
-            --build-arg POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+          docker-compose build
 
           # Stop and remove existing containers
           docker-compose down
@@ -49,43 +56,5 @@ jobs:
           # Start the containers with the new images
           docker-compose up -d
 
-          # Configure Nginx
-          cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
-          server {
-              listen 80;
-              server_name hack.kevinlockburner.com;
-
-              return 301 https://\$host\$request_uri;
-          }
-
-          server {
-              listen 443 ssl;
-              server_name hack.kevinlockburner.com;
-
-              ssl_certificate /etc/letsencrypt/live/hack.kevinlockburner.com/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/hack.kevinlockburner.com/privkey.pem;
-
-              ssl_protocols TLSv1.2 TLSv1.3;
-              ssl_ciphers HIGH:!aNULL:!MD5;
-              ssl_prefer_server_ciphers on;
-
-              location /api/ {
-                  proxy_pass http://localhost:8000/;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-
-              location / {
-                  proxy_pass http://localhost:3000/;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-          }
-          EOL
-
-          nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
           EOF
+
