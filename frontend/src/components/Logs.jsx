@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import "./Logs.css";
 
-const Logs = ({ logs, highlightIndex, onLogClick }) => {
+const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
   const logRefs = useRef([]);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ const Logs = ({ logs, highlightIndex, onLogClick }) => {
     <div className="logs">
       <h2>Attack Logs</h2>
       <div className="log-list">
-        {logs.map((log, index) => (
+        {maplogs.map((log, index) => (
           <div
             key={index}
             ref={(el) => (logRefs.current[index] = el)} // save each log entry ref

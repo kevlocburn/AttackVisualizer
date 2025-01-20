@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import psycopg2
@@ -26,13 +26,13 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "https://hack.kevinlockburner.com"
-    ],  # Add all frontend URLs
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Pydantic model for API data
+# Pydantic model
 class AttackLog(BaseModel):
     ip_address: str
     timestamp: str
@@ -43,15 +43,6 @@ class AttackLog(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
-@app.on_event("startup")
-def startup():
-    """Test the database connection on app startup."""
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        print("Database connection successful!")
-        conn.close()
-    except Exception as e:
-        print(f"Error connecting to the database: {e}")
 
 @app.get("/")
 def read_root():
@@ -66,16 +57,12 @@ def read_logs():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT DISTINCT ON (city)
-                ip_address, timestamp, port, city, region, country, latitude, longitude
+            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
             FROM failed_logins
-            WHERE city IS NOT NULL
-            ORDER BY city, timestamp DESC
-            LIMIT 500;
+            ORDER BY timestamp DESC;
         """)
         rows = cursor.fetchall()
 
-        # Map database rows to Pydantic models
         logs = [
             AttackLog(
                 ip_address=row[0],
@@ -84,8 +71,8 @@ def read_logs():
                 city=row[3],
                 region=row[4],
                 country=row[5],
-                latitude=row[6] if row[6] is not None else None,
-                longitude=row[7] if row[7] is not None else None,
+                latitude=row[6],
+                longitude=row[7],
             )
             for row in rows
         ]
@@ -94,8 +81,57 @@ def read_logs():
         conn.close()
         return logs
     except Exception as e:
-        print(f"Error fetching logs: {e}")
-        return []
+        raise HTTPException(status_code=500, detail=f"Error fetching logs: {e}")
+
+@app.get("/maplogs/", response_model=List[AttackLog])
+def read_map_logs():
+    """Fetch last 100 logs with max 2 repeating cities."""
+    try:
+        conn = psycopg2.connect(**DB_CONFIG)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            WITH ranked_entries AS (
+                SELECT 
+                    ip_address, 
+                    timestamp, 
+                    port, 
+                    city, 
+                    region, 
+                    country, 
+                    latitude, 
+                    longitude,
+                    ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
+                FROM failed_logins
+                WHERE city IS NOT NULL
+            )
+            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+            FROM ranked_entries
+            WHERE rank <= 2
+            ORDER BY timestamp DESC
+            LIMIT 100;
+        """)
+        rows = cursor.fetchall()
+
+        maplogs = [
+            AttackLog(
+                ip_address=row[0],
+                timestamp=row[1].strftime("%Y-%m-%d %H:%M:%S"),
+                port=row[2],
+                city=row[3],
+                region=row[4],
+                country=row[5],
+                latitude=row[6],
+                longitude=row[7],
+            )
+            for row in rows
+        ]
+
+        cursor.close()
+        conn.close()
+        return maplogs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching map logs: {e}")
 
 @app.post("/logs/")
 def create_log(log: AttackLog):
@@ -124,5 +160,4 @@ def create_log(log: AttackLog):
 
         return {"message": "Log added successfully", "log": log}
     except Exception as e:
-        print(f"Error inserting log: {e}")
-        return {"message": "Failed to add log", "error": str(e)}
+        raise HTTPException(status_code=500, detail=f"Error inserting log: {e}")

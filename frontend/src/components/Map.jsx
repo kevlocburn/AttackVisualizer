@@ -5,7 +5,7 @@ import "leaflet-ant-path";
 
 const serverLocation = [40.8586, -74.1636]; 
 
-const Map = ({ logs, highlightLog, highlightIndex }) => {
+const Map = ({ mapLogs, highlightLog, highlightIndex }) => {
   const highlightedLine = useRef(null); 
   const mapRef = useRef(null); 
   const linesRef = useRef([]); 
@@ -38,8 +38,8 @@ const Map = ({ logs, highlightLog, highlightIndex }) => {
         radius: 30000,
       }).addTo(map);
 
-      // logs as markers and lines
-      logs.forEach((log, index) => {
+      // mapLogs as markers and lines
+      mapLogs.forEach((log, index) => {
         const sourceLatLng = [log.latitude, log.longitude];
 
         // check correct coordinates
@@ -126,7 +126,7 @@ const Map = ({ logs, highlightLog, highlightIndex }) => {
         mapRef.current = null; 
       }
     };
-  }, [logs, highlightLog, highlightIndex]); // Re-run the effect when logs or highlightIndex change
+  }, [mapLogs, highlightLog, highlightIndex]); // Re-run the effect when maplogs or highlightIndex change
 
   return <div id="map" style={{ height: "100%", width: "100%" }}></div>;
 };
