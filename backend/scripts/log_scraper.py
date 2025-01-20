@@ -4,7 +4,7 @@ import psycopg2
 import requests
 import time
 from dotenv import load_dotenv
-from datetime import datetime  # Ensure datetime is imported
+from datetime import datetime
 
 # Load environment variables from .env
 load_dotenv()
@@ -14,7 +14,7 @@ DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
-    "host": "127.0.0.1",  # Host refers to the localhost where TimescaleDB is accessible
+    "host": "127.0.0.1",  # Host refers to localhost where TimescaleDB is accessible
     "port": 5432,  # TimescaleDB default port
 }
 
@@ -38,7 +38,9 @@ def parse_new_logs(last_timestamp):
             for line in file:
                 match = re.search(LOG_PATTERN, line)
                 if match:
-                    timestamp, user, ip_address, port = match.groups()
+                    timestamp_str, user, ip_address, port = match.groups()
+                    timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(year=datetime.now().year)
+
                     if not last_timestamp or timestamp > last_timestamp:
                         parsed_data.append({
                             "timestamp": timestamp,
@@ -88,9 +90,6 @@ def insert_into_db(data):
 
     for entry in data:
         try:
-            # Parse timestamp and add the current year
-            timestamp = datetime.strptime(entry["timestamp"], "%b %d %H:%M:%S").replace(year=datetime.now().year)
-
             geo_data = resolve_geolocation(entry["ip_address"])
             time.sleep(1)  # Added delay to avoid rate limits
 
@@ -101,7 +100,7 @@ def insert_into_db(data):
                 ON CONFLICT (timestamp, ip_address, port) DO NOTHING;
                 """,
                 (
-                    timestamp,
+                    entry["timestamp"],
                     entry["ip_address"],
                     entry["port"],
                     geo_data.get("city"),
@@ -130,7 +129,7 @@ def get_last_processed_timestamp():
     result = cursor.fetchone()
     cursor.close()
     conn.close()
-    return result[0] if result[0] else ""
+    return result[0] if result[0] else None
 
 
 if __name__ == "__main__":
