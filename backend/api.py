@@ -54,11 +54,21 @@ class ConnectionManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
 
     async def send_data(self, data: dict):
+        to_remove = []
         for connection in self.active_connections:
-            await connection.send_json(data)
+            try:
+                await connection.send_json(data)
+            except Exception as e:
+                print(f"Error sending data to client: {e}")
+                to_remove.append(connection)
+        # Remove disconnected clients
+        for connection in to_remove:
+            self.disconnect(connection)
+
 
 manager = ConnectionManager()
 
@@ -188,50 +198,56 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
-            # Fetch the latest log from the database
-            conn = psycopg2.connect(**DB_CONFIG)
-            cursor = conn.cursor()
+            # Fetch the latest logs from the database
+            try:
+                with psycopg2.connect(**DB_CONFIG) as conn:
+                    with conn.cursor() as cursor:
+                        cursor.execute("""
+                        WITH ranked_entries AS (
+                            SELECT 
+                                ip_address, 
+                                timestamp, 
+                                port, 
+                                city, 
+                                region, 
+                                country, 
+                                latitude, 
+                                longitude,
+                                ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
+                            FROM failed_logins
+                            WHERE city IS NOT NULL
+                        )
+                        SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+                        FROM ranked_entries
+                        WHERE rank <= 2
+                        ORDER BY timestamp DESC
+                        LIMIT 100;
+                        """)
+                        rows = cursor.fetchall()
 
-            cursor.execute("""
-            WITH ranked_entries AS (
-                SELECT 
-                    ip_address, 
-                    timestamp, 
-                    port, 
-                    city, 
-                    region, 
-                    country, 
-                    latitude, 
-                    longitude,
-                    ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
-                FROM failed_logins
-                WHERE city IS NOT NULL
-            )
-            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-            FROM ranked_entries
-            WHERE rank <= 2
-            ORDER BY timestamp DESC
-            LIMIT 100;
-        """)
-            row = cursor.fetchone()
+                        logs = [
+                            {
+                                "ip_address": row[0],
+                                "timestamp": row[1].strftime("%Y-%m-%d %H:%M:%S"),
+                                "port": row[2],
+                                "city": row[3],
+                                "region": row[4],
+                                "country": row[5],
+                                "latitude": row[6],
+                                "longitude": row[7],
+                            }
+                            for row in rows
+                        ]
+                        
+                        # Send each log to connected clients
+                        for log in logs:
+                            await manager.send_data(log)
 
-            if row:
-                log = {
-                    "ip_address": row[0],
-                    "timestamp": row[1].strftime("%Y-%m-%d %H:%M:%S"),
-                    "port": row[2],
-                    "city": row[3],
-                    "region": row[4],
-                    "country": row[5],
-                    "latitude": row[6],
-                    "longitude": row[7],
-                }
-                await manager.send_data(log)
-
-            cursor.close()
-            conn.close()
+            except Exception as db_error:
+                print(f"Database error: {db_error}")
 
             # Simulate delay between updates
             await asyncio.sleep(2)
     except WebSocketDisconnect:
+        print(f"WebSocket disconnected: {websocket.client}")
         manager.disconnect(websocket)
