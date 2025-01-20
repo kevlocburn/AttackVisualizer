@@ -13,7 +13,7 @@ DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
-    "host": "timescaledb",
+    "host": "timescaledb", #localhost
     "port": 5432,
 }
 
@@ -47,20 +47,33 @@ def parse_new_logs(last_timestamp):
     return parsed_data
 
 def resolve_geolocation(ip_address):
-    """Resolve geolocation information for an IP address."""
-    try:
-        response = requests.get(GEO_API_URL.format(ip=ip_address), params={"fields": GEO_API_FIELDS}, timeout=5)
-        data = response.json()
-        if data.get("status") == "success":
-            return {
-                "country": data.get("country"),
-                "region": data.get("regionName"),
-                "city": data.get("city"),
-                "latitude": data.get("lat"),
-                "longitude": data.get("lon"),
-            }
-    except requests.RequestException as e:
-        print(f"Error fetching geolocation for IP {ip_address}: {e}")
+    """Resolve geolocation information for an IP address with retries."""
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = requests.get(
+                GEO_API_URL.format(ip=ip_address),
+                params={"fields": GEO_API_FIELDS},
+                timeout=5
+            )
+            if response.ok:
+                data = response.json()
+                if data.get("status") == "success":
+                    return {
+                        "country": data.get("country"),
+                        "region": data.get("regionName"),
+                        "city": data.get("city"),
+                        "latitude": data.get("lat"),
+                        "longitude": data.get("lon"),
+                    }
+            elif response.status_code == 429:
+                print(f"Rate limited for IP {ip_address}, retrying...")
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                print(f"Failed API request for IP {ip_address}, Status Code: {response.status_code}")
+                break
+        except Exception as e:
+            print(f"Error resolving geolocation for IP {ip_address}: {e}")
     return {}
 
 def insert_into_db(data):
