@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import "./Logs.css";
 
-const Logs = ({ mapLogs, highlightIndex, onLogClick }) => {
+const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
   const logRefs = useRef([]);
 
   useEffect(() => {
@@ -19,8 +19,8 @@ const Logs = ({ mapLogs, highlightIndex, onLogClick }) => {
     <div className="logs">
       <h2>Attack Logs</h2>
       <div className="log-list">
-        {mapLogs && mapLogs.length > 0 ? (
-          mapLogs.map((log, index) => (
+        {maplogs && maplogs.length > 0 ? (
+          maplogs.map((log, index) => (
             <div
               key={index}
               ref={(el) => (logRefs.current[index] = el)}

@@ -6,7 +6,7 @@ import "./App.css";
 
 function App() {
   const [logs, setLogs] = useState([]);
-  const [mapLogs, setMapLogs] = useState([]);
+  const [maplogs, setMapLogs] = useState([]);
   const [highlightIndex, setHighlightIndex] = useState(null);
 
   const API_BASE_URL =
@@ -31,11 +31,11 @@ function App() {
   return (
     <div className="app">
       <div className="map-container">
-        <Map logs={mapLogs} highlightLog={setHighlightIndex} highlightIndex={highlightIndex} />
+        <Map maplogs={maplogs} highlightLog={setHighlightIndex} highlightIndex={highlightIndex} />
       </div>
       <div className="bottom-container">
         <div className="logs-section">
-          <Logs logs={mapLogs} highlightIndex={highlightIndex} onLogClick={setHighlightIndex} />
+          <Logs maplogs={maplogs} highlightIndex={highlightIndex} onLogClick={setHighlightIndex} />
         </div>
         <div className="chart-section">
           <ChartSection logs={logs} />
