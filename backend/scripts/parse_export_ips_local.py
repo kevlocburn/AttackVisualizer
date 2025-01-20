@@ -74,7 +74,6 @@ def insert_into_db(data):
 
     for entry in data:
         try:
-            # Parse and ensure timestamp is a datetime object
             timestamp = datetime.strptime(entry["timestamp"], "%b %d %H:%M:%S").replace(year=datetime.now().year)
 
             geo_data = resolve_geolocation(entry["ip_address"])
@@ -107,21 +106,9 @@ def insert_into_db(data):
     cursor.close()
     conn.close()
 
-def get_last_processed_timestamp():
-    """Retrieve the most recent timestamp processed."""
-    conn = psycopg2.connect(**DB_CONFIG)
-    cursor = conn.cursor()
-    cursor.execute("SELECT MAX(timestamp) FROM failed_logins;")
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-
-    # Return the timestamp as a string
-    return result[0] if result[0] else None
-
 if __name__ == "__main__":
     file_format = "csv"
-    file_path = "/home/AttackVisualizer/backend/scripts/failed_logins.csv"
+    file_path = r"C:\repos\AttackVisualizer\backend\scripts\failed_logins.csv"
 
     failed_logins = load_failed_logins(file_path, file_format)
 

@@ -17,7 +17,7 @@ const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
 
   return (
     <div className="logs">
-      <h2>Attack Logs</h2>
+      <h2>Last 100 Attack Logs</h2>
       <div className="log-list">
         {maplogs && maplogs.length > 0 ? (
           maplogs.map((log, index) => (
