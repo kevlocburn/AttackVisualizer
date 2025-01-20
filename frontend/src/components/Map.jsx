@@ -87,7 +87,7 @@ const Map = ({ logs, highlightLog, highlightIndex }) => {
             // highlighted line
             line.setStyle({
               color: "red",
-              weight: 10,
+              weight: 7,
               opacity: 1,
             });
 
