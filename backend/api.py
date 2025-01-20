@@ -196,10 +196,12 @@ async def websocket_endpoint(websocket: WebSocket):
     WebSocket endpoint to send real-time log data.
     """
     await manager.connect(websocket)
+    last_sent_timestamp = None  # Track the timestamp of the last sent log
+
     try:
         while True:
-            # Fetch the latest logs from the database
             try:
+                # Fetch the latest logs from the database
                 with psycopg2.connect(**DB_CONFIG) as conn:
                     with conn.cursor() as cursor:
                         cursor.execute("""
@@ -225,6 +227,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         """)
                         rows = cursor.fetchall()
 
+                        # Format logs and find new entries
                         logs = [
                             {
                                 "ip_address": row[0],
@@ -238,16 +241,17 @@ async def websocket_endpoint(websocket: WebSocket):
                             }
                             for row in rows
                         ]
-                        
-                        # Send each log to connected clients
-                        for log in logs:
-                            await manager.send_data(log)
+
+                        # Filter logs by timestamp (send only new logs)
+                        if logs and (last_sent_timestamp is None or logs[0]["timestamp"] > last_sent_timestamp):
+                            await manager.send_data({"type": "logs", "data": logs})
+                            last_sent_timestamp = logs[0]["timestamp"]
 
             except Exception as db_error:
                 print(f"Database error: {db_error}")
 
-            # Simulate delay between updates
-            await asyncio.sleep(2)
+            # Adjust the delay between updates
+            await asyncio.sleep(5)  # Update every 5 seconds
     except WebSocketDisconnect:
         print(f"WebSocket disconnected: {websocket.client}")
         manager.disconnect(websocket)

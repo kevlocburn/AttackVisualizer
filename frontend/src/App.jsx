@@ -35,12 +35,18 @@ function App() {
     );
 
     ws.onmessage = (event) => {
-      const newLog = JSON.parse(event.data);
-
-      // Update state with the new log
-      setLogs((prevLogs) => [newLog, ...prevLogs].slice(0, 100)); // Limit to 100 logs
-      setMapLogs((prevMapLogs) => [newLog, ...prevMapLogs].slice(0, 100)); // Limit to 100 logs
+      const message = JSON.parse(event.data);
+    
+      if (message.type === "logs") {
+        const newLogs = message.data;
+    
+        setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 100)); // Append and limit to 100 logs
+        setMapLogs((prevMapLogs) => [...newLogs, ...prevMapLogs].slice(0, 100)); // Append and limit to 100 logs
+      } else if (message.type === "ping") {
+        console.log("Keep-alive ping received");
+      }
     };
+    
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
