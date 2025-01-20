@@ -19,24 +19,37 @@ const Logs = ({ mapLogs, highlightIndex, onLogClick }) => {
     <div className="logs">
       <h2>Attack Logs</h2>
       <div className="log-list">
-        {mapLogs.map((log, index) => (
-          <div
-            key={index}
-            ref={(el) => (logRefs.current[index] = el)}
-            className={`log-entry ${highlightIndex === index ? "highlight" : ""}`}
-            onClick={() => onLogClick(index)}
-          >
-            <p>
-              <strong>IP:</strong> {log.ip_address}
-            </p>
-            <p>
-              <strong>Time:</strong> {formatTimestamp(log.timestamp)}
-            </p>
-            <p>
-              <strong>Location:</strong> {log.city || "Unknown"}, {log.region || "Unknown"}, {log.country || "Unknown"}
-            </p>
-          </div>
-        ))}
+        {mapLogs && mapLogs.length > 0 ? (
+          mapLogs.map((log, index) => (
+            <div
+              key={index}
+              ref={(el) => (logRefs.current[index] = el)}
+              className={`log-entry ${highlightIndex === index ? "highlight" : ""}`}
+              onClick={() => onLogClick(index)}
+            >
+              <p>
+                <strong>IP:</strong> {log.ip_address}
+              </p>
+              <p>
+                <strong>Time:</strong> {formatTimestamp(log.timestamp)}
+              </p>
+              <p>
+                <strong>Port:</strong> {log.port}
+              </p>
+              <p>
+                <strong>City:</strong> {log.city}
+              </p>
+              <p>
+                <strong>Region:</strong> {log.region}
+              </p>
+              <p>
+                <strong>Country:</strong> {log.country}
+              </p>
+            </div>
+          ))
+        ) : (
+          <p>No logs available</p>
+        )}
       </div>
     </div>
   );
