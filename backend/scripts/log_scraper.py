@@ -137,17 +137,16 @@ def get_last_processed_timestamp():
 if __name__ == "__main__":
     print("Starting log scraper...")
 
-    while True:
-        try:
-            last_timestamp = get_last_processed_timestamp()
-            new_logs = parse_new_logs(last_timestamp)
-            print(f"Found {len(new_logs)} new log entries.")
+    try:
+        last_timestamp = get_last_processed_timestamp()
+        new_logs = parse_new_logs(last_timestamp)
+        print(f"Found {len(new_logs)} new log entries.")
 
-            if new_logs:
-                insert_into_db(new_logs)
-                print(f"Inserted {len(new_logs)} new entries into the database.")
+        if new_logs:
+            insert_into_db(new_logs)
+            print(f"Inserted {len(new_logs)} new entries into the database.")
 
-        except Exception as e:
-            print(f"Error: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
 
-        time.sleep(CHECK_INTERVAL)
+    print("Log scraper completed.")
