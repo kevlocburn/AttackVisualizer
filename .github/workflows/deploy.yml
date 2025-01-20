@@ -29,8 +29,8 @@ jobs:
       # Step 4: Build Docker Images
       - name: Build Docker Images
         run: |
-          docker build -t attackvisualizer-frontend:latest -f Dockerfile .
-          docker build -t attackvisualizer-api:latest -f Dockerfile.api .
+          docker build -t attackvisualizer-frontend:latest -f ./frontend/Dockerfile ./frontend
+          docker build -t attackvisualizer-api:latest -f ./backend/Dockerfile.api ./backend
 
       # Step 5: Save Images Locally
       - name: Save Docker Images
@@ -41,7 +41,7 @@ jobs:
       # Step 6: Transfer Docker Images to Server
       - name: Transfer Docker Images
         run: |
-          scp frontend.tar.gz api.tar.gz root@${{ secrets.DO_IP }}:/home/AttackVisualizer/
+          scp frontend.tar.gz api.tar.gz root@${{ secrets.DO_IP }}:/root/
 
       # Step 7: Deploy on Server
       - name: Deploy Docker Images on Server
@@ -56,6 +56,9 @@ jobs:
           # Load Docker Images
           gunzip -c frontend.tar.gz | docker load
           gunzip -c api.tar.gz | docker load
+
+          # Clean up tar.gz files after loading images
+          rm -f /root/frontend.tar.gz /root/api.tar.gz
 
           # Update Git Repo
           if [ ! -d /home/AttackVisualizer ]; then
