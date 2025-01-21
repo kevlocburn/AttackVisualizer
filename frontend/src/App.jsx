@@ -40,7 +40,7 @@ function App() {
       if (message.type === "logs") {
         const newLogs = message.data;
     
-        setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 1000)); // Append and limit to 1000 logs
+      //  setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 1000)); // Append and limit to 1000 logs
         setMapLogs((prevMapLogs) => [...newLogs, ...prevMapLogs].slice(0, 100)); // Append and limit to 100 logs
       } else if (message.type === "ping") {
         console.log("Keep-alive ping received");
