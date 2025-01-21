@@ -29,6 +29,21 @@ const ChartSection = ({ logs }) => {
   const [topCountriesData, setTopCountriesData] = useState(null);
   const [attackTrendsData, setAttackTrendsData] = useState(null);
   const [timeOfDayData, setTimeOfDayData] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 768px)");
+    const handleMediaQueryChange = (e) => setIsMobile(e.matches);
+
+    // Set initial value
+    setIsMobile(mediaQuery.matches);
+
+    // Add listener
+    mediaQuery.addEventListener("change", handleMediaQueryChange);
+
+    // Cleanup listener on unmount
+    return () => mediaQuery.removeEventListener("change", handleMediaQueryChange);
+  }, []);
 
   useEffect(() => {
     // "Top Attack Sources (Country)"
@@ -40,7 +55,7 @@ const ChartSection = ({ logs }) => {
 
     const topCountriesSorted = Object.entries(topCountries)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+      .slice(0, isMobile ? 2 : 10);
 
     setTopCountriesData({
       labels: topCountriesSorted.map(([country]) => country),
@@ -68,7 +83,7 @@ const ChartSection = ({ logs }) => {
       labels: trendsSorted.map(([date]) => date),
       datasets: [
         {
-          label: "Number of Attacks",
+          label: logs.country.count +" Attacks",
           data: trendsSorted.map(([_, count]) => count),
           fill: true,
           backgroundColor: "rgba(75, 192, 192, 0.2)",
@@ -96,7 +111,7 @@ const ChartSection = ({ logs }) => {
         },
       ],
     });
-  }, [logs]);
+  }, [logs, isMobile]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
