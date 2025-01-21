@@ -116,6 +116,10 @@ const ChartSection = ({ logs }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <div>
+        <h3>Total Logs</h3>
+        <p>{logs.length}</p>
+      </div>
+      <div>
         <h3>Top Attack Sources (Country)</h3>
         {topCountriesData ? <Bar data={topCountriesData} options={{ responsive: true }} /> : <p>Loading...</p>}
       </div>
@@ -130,5 +134,6 @@ const ChartSection = ({ logs }) => {
     </div>
   );
 };
+
 
 export default ChartSection;
