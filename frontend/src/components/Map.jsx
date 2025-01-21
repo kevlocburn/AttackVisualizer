@@ -94,14 +94,24 @@ const Map = ({ maplogs, highlightLog, highlightIndex }) => {
 
   // Highlight specific line when `highlightIndex` changes
   useEffect(() => {
-    if (highlightIndex !== null && linesRef.current[highlightIndex]) {
-      // Reset previous highlighted line
+    if (highlightIndex !== null && linesRef.current.length) {
+      // Update styles for all lines
       linesRef.current.forEach((line, index) => {
-        line.setStyle({
-          color: index === highlightIndex ? "red" : "orange",
-          weight: index === highlightIndex ? 7 : 3,
-          opacity: index === highlightIndex ? 1 : 0.7,
-        });
+        if (index === highlightIndex) {
+          // Highlight the selected line
+          line.setStyle({
+            color: "red",
+            weight: 7,
+            opacity: 1,
+          });
+        } else {
+          // Dim all other lines
+          line.setStyle({
+            color: "orange",
+            weight: 3,
+            opacity: 0.3, // Reduced opacity for unselected lines
+          });
+        }
       });
     }
   }, [highlightIndex]);
