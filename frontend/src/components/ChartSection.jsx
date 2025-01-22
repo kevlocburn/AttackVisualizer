@@ -9,6 +9,7 @@ import {
   Tooltip,
   Legend,
   LineElement,
+  PointElement, // Ensure this is registered
 } from "chart.js";
 
 ChartJS.register(
@@ -18,7 +19,8 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  LineElement
+  LineElement,
+  PointElement // Explicitly register PointElement
 );
 
 const ChartSection = ({ apiBaseUrl }) => {
@@ -95,19 +97,33 @@ const ChartSection = ({ apiBaseUrl }) => {
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <div>
         <h3>Top Attack Sources (Country)</h3>
-        {topCountriesData ? <Bar data={topCountriesData} options={{ responsive: true }} /> : <p>Loading...</p>}
+        {topCountriesData ? (
+          <Bar data={topCountriesData} options={{ responsive: true }} />
+        ) : (
+          <p>Loading...</p>
+        )}
       </div>
       <div>
         <h3>Attack Trends Over Time</h3>
-        {attackTrendsData ? <Line data={attackTrendsData} options={{ responsive: true }} /> : <p>Loading...</p>}
+        {attackTrendsData ? (
+          <Line data={attackTrendsData} options={{ responsive: true }} />
+        ) : (
+          <p>Loading...</p>
+        )}
       </div>
       <div>
         <h3>Attack Distribution by Time of Day</h3>
-        {timeOfDayData ? <Bar data={timeOfDayData} options={{ responsive: true, indexAxis: "y" }} /> : <p>Loading...</p>}
+        {timeOfDayData ? (
+          <Bar
+            data={timeOfDayData}
+            options={{ responsive: true, indexAxis: "y" }}
+          />
+        ) : (
+          <p>Loading...</p>
+        )}
       </div>
     </div>
   );
 };
-
 
 export default ChartSection;
