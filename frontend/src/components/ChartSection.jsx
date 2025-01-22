@@ -27,6 +27,7 @@ const ChartSection = ({ apiBaseUrl }) => {
   const [topCountriesData, setTopCountriesData] = useState(null);
   const [attackTrendsData, setAttackTrendsData] = useState(null);
   const [timeOfDayData, setTimeOfDayData] = useState(null);
+  const [totalFailedLogins, setTotalFailedLogins] = useState(null);
 
   useEffect(() => {
     // Fetch top attack sources
@@ -91,10 +92,20 @@ const ChartSection = ({ apiBaseUrl }) => {
         });
       })
       .catch((error) => console.error("Error fetching time of day:", error));
+
+    fetch(`${apiBaseUrl}/logs/counts/`)
+      .then((response) => response.json())
+      .then((data) => {
+        setTotalFailedLogins(data.count)
+      })
+      .catch((error) => console.error("Error fetching total failed logins:", error));
   }, [apiBaseUrl]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <div>
+        <h2>Total Failed Logins: {totalFailedLogins}</h2>
+      </div>
       <div>
         <h3>Top Attack Sources (Country)</h3>
         {topCountriesData ? (
