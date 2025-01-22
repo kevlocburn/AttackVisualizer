@@ -31,9 +31,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      REDIS_HOST: host.docker.internal
     ports:
       - "8000:8000"
-    restart: unless-stopped  
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
     volumes:
       - /var/log:/host_var_log:ro
 
