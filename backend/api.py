@@ -48,7 +48,7 @@ async def startup():
         DB_POOL = await create_pool(**DB_CONFIG)
 
         # Initialize Redis client
-        REDIS_CLIENT = Redis(host="localhost", port=6379, decode_responses=True)
+        REDIS_CLIENT = Redis(host="172.17.0.1", port=6379, decode_responses=True)
         await REDIS_CLIENT.ping()  # Test Redis connection
         print("Redis connection established.")
     except Exception as e:
