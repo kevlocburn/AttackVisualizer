@@ -8,3 +8,8 @@ python-dotenv
 requests
 psycopg2-binary
 datetime
+aioredis
+asyncpg
+json
+
+
