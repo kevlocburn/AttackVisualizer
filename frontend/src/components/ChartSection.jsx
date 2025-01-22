@@ -93,7 +93,7 @@ const ChartSection = ({ apiBaseUrl }) => {
       })
       .catch((error) => console.error("Error fetching time of day:", error));
 
-    fetch(`${apiBaseUrl}/logs/counts/`)
+    fetch(`${apiBaseUrl}/logs/count/`)
       .then((response) => response.json())
       .then((data) => {
         setTotalFailedLogins(data.count)
