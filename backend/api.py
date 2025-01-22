@@ -1,39 +1,66 @@
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
-import psycopg2
 import os
 from dotenv import load_dotenv
-from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+import asyncpg
+from asyncpg import create_pool
 
-# Load environment variables from .env
+# Load environment variables
 load_dotenv()
 
 # Database connection parameters
 DB_CONFIG = {
-    "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
+    "database": os.getenv("POSTGRES_DB"),
     "host": "timescaledb",
     "port": 5432,
+    "min_size": 1,
+    "max_size": 20,  # Adjust as needed
 }
 
 # FastAPI instance
 app = FastAPI()
 
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "https://hack.kevinlockburner.com"
-    ],
+    allow_origins=["http://localhost:3000", "https://hack.kevinlockburner.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Pydantic model
+# Global variable for connection pool
+DB_POOL = None
+
+# Lifespan events
+@app.on_event("startup")
+async def startup():
+    global DB_POOL
+    try:
+        # Initialize database connection pool
+        DB_POOL = await create_pool(**DB_CONFIG)
+        print("Database connection pool established.")
+    except Exception as e:
+        print(f"Error during startup: {e}")
+        raise RuntimeError("Failed to initialize resources during startup.")
+
+@app.on_event("shutdown")
+async def shutdown():
+    global DB_POOL
+    try:
+        # Close database pool
+        if DB_POOL:
+            await DB_POOL.close()
+            print("Database connection pool closed.")
+    except Exception as e:
+        print(f"Error during shutdown: {e}")
+
+# Pydantic model for attack logs
 class AttackLog(BaseModel):
     ip_address: str
     timestamp: str
@@ -44,214 +71,101 @@ class AttackLog(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
 
-# WebSocket connection manager
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
+# Retry logic for database queries
+async def fetch_with_retry(pool, query, params=None, retries=3, delay=2):
+    for attempt in range(retries):
+        try:
+            async with pool.acquire() as conn:
+                if params:
+                    return await conn.fetch(query, *params)
+                return await conn.fetch(query)
+        except asyncpg.exceptions.TooManyConnectionsError as e:
+            print(f"Connection error: {e}")
+            if attempt < retries - 1:
+                await asyncio.sleep(delay)
+            else:
+                raise
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def send_data(self, data: dict):
-        to_remove = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(data)
-            except Exception as e:
-                print(f"Error sending data to client: {e}")
-                to_remove.append(connection)
-        # Remove disconnected clients
-        for connection in to_remove:
-            self.disconnect(connection)
-
-
-manager = ConnectionManager()
-
+# API endpoints
 @app.get("/")
 def read_root():
-    """Root endpoint."""
     return {"message": "Welcome to the Server Attack Map API"}
 
 @app.get("/logs/", response_model=List[AttackLog])
-def read_logs():
-    """Fetch all logs from the database."""
+async def read_logs(limit: int = 100, offset: int = 0):
+    query = """
+        SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+        FROM failed_logins
+        ORDER BY timestamp DESC
+    """
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-            FROM failed_logins
-            ORDER BY timestamp DESC;
-        """)
-        rows = cursor.fetchall()
-
-        logs = [
-            AttackLog(
-                ip_address=row[0],
-                timestamp=row[1].strftime("%Y-%m-%d %H:%M:%S"),
-                port=row[2],
-                city=row[3],
-                region=row[4],
-                country=row[5],
-                latitude=row[6],
-                longitude=row[7],
-            )
-            for row in rows
-        ]
-
-        cursor.close()
-        conn.close()
-        return logs
+        rows = await fetch_with_retry(DB_POOL, query, params=(limit, offset))
+        return [dict(row) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching logs: {e}")
 
 @app.get("/maplogs/", response_model=List[AttackLog])
-def read_map_logs():
-    """Fetch last 100 logs with max 2 repeating cities."""
+async def read_map_logs():
+    query = """
+        WITH ranked_entries AS (
+            SELECT 
+                ip_address, 
+                timestamp, 
+                port, 
+                city, 
+                region, 
+                country, 
+                latitude, 
+                longitude,
+                ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
+            FROM failed_logins
+            WHERE city IS NOT NULL
+        )
+        SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+        FROM ranked_entries
+        WHERE rank <= 2
+        ORDER BY timestamp DESC
+        LIMIT 100;
+    """
     try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            WITH ranked_entries AS (
-                SELECT 
-                    ip_address, 
-                    timestamp, 
-                    port, 
-                    city, 
-                    region, 
-                    country, 
-                    latitude, 
-                    longitude,
-                    ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
-                FROM failed_logins
-                WHERE city IS NOT NULL
-            )
-            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-            FROM ranked_entries
-            WHERE rank <= 2
-            ORDER BY timestamp DESC
-            LIMIT 100;
-        """)
-        rows = cursor.fetchall()
-
-        maplogs = [
-            AttackLog(
-                ip_address=row[0],
-                timestamp=row[1].strftime("%Y-%m-%d %H:%M:%S"),
-                port=row[2],
-                city=row[3],
-                region=row[4],
-                country=row[5],
-                latitude=row[6],
-                longitude=row[7],
-            )
-            for row in rows
-        ]
-
-        cursor.close()
-        conn.close()
-        return maplogs
+        rows = await fetch_with_retry(DB_POOL, query)
+        return [dict(row) for row in rows]
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching map logs: {e}")
 
-@app.post("/logs/")
-def create_log(log: AttackLog):
-    """Insert a new log into the database."""
-    try:
-        conn = psycopg2.connect(**DB_CONFIG)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO failed_logins (ip_address, timestamp, port, city, region, country, latitude, longitude)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            log.ip_address,
-            log.timestamp,
-            log.port,
-            log.city,
-            log.region,
-            log.country,
-            log.latitude,
-            log.longitude,
-        ))
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        return {"message": "Log added successfully", "log": log}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error inserting log: {e}")
-
 @app.websocket("/ws/maplogs")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint to send real-time log data.
-    """
-    await manager.connect(websocket)
-    last_sent_timestamp = None  # Track the timestamp of the last sent log
-
+    await websocket.accept()
     try:
         while True:
+            query = """
+                WITH ranked_entries AS (
+                    SELECT 
+                        ip_address, 
+                        timestamp, 
+                        port, 
+                        city, 
+                        region, 
+                        country, 
+                        latitude, 
+                        longitude,
+                        ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
+                    FROM failed_logins
+                    WHERE city IS NOT NULL
+                )
+                SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
+                FROM ranked_entries
+                WHERE rank <= 2
+                ORDER BY timestamp DESC
+                LIMIT 100;
+            """
             try:
-                # Fetch the latest logs from the database
-                with psycopg2.connect(**DB_CONFIG) as conn:
-                    with conn.cursor() as cursor:
-                        cursor.execute("""
-                        WITH ranked_entries AS (
-                            SELECT 
-                                ip_address, 
-                                timestamp, 
-                                port, 
-                                city, 
-                                region, 
-                                country, 
-                                latitude, 
-                                longitude,
-                                ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
-                            FROM failed_logins
-                            WHERE city IS NOT NULL
-                        )
-                        SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-                        FROM ranked_entries
-                        WHERE rank <= 2
-                        ORDER BY timestamp DESC
-                        LIMIT 100;
-                        """)
-                        rows = cursor.fetchall()
-
-                        # Format logs and find new entries
-                        logs = [
-                            {
-                                "ip_address": row[0],
-                                "timestamp": row[1].strftime("%Y-%m-%d %H:%M:%S"),
-                                "port": row[2],
-                                "city": row[3],
-                                "region": row[4],
-                                "country": row[5],
-                                "latitude": row[6],
-                                "longitude": row[7],
-                            }
-                            for row in rows
-                        ]
-
-                        # Filter logs by timestamp (send only new logs)
-                        if logs and (last_sent_timestamp is None or logs[0]["timestamp"] > last_sent_timestamp):
-                            await manager.send_data({"type": "logs", "data": logs})
-                            last_sent_timestamp = logs[0]["timestamp"]
-
-            except Exception as db_error:
-                print(f"Database error: {db_error}")
-
-            # Adjust the delay between updates
-            await asyncio.sleep(5)  # Update every 5 seconds
+                rows = await fetch_with_retry(DB_POOL, query)
+                logs = [dict(row) for row in rows]
+                await websocket.send_json({"type": "logs", "data": logs})
+            except Exception as e:
+                print(f"Database error: {e}")
+            
+            await asyncio.sleep(15)  # Update every 15 seconds
     except WebSocketDisconnect:
-        print(f"WebSocket disconnected: {websocket.client}")
-        manager.disconnect(websocket)
+        print("WebSocket disconnected.")
