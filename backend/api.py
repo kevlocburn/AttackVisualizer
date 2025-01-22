@@ -104,6 +104,54 @@ async def read_logs(limit: int = 100, offset: int = 0):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching logs: {e}")
 
+@app.get("/charts/top-countries/")
+async def top_attack_sources(limit: int = 10):
+    query = """
+        SELECT country, COUNT(*) AS count
+        FROM failed_logins
+        GROUP BY country
+        ORDER BY count DESC
+        LIMIT $1
+    """
+    try:
+        rows = await fetch_with_retry(DB_POOL, query, params=(limit,))
+        return [{"country": row["country"] or "Unknown", "count": row["count"]} for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching top attack sources: {e}")
+
+
+@app.get("/charts/attack-trends/")
+async def attack_trends():
+    query = """
+        SELECT DATE(timestamp) AS attack_date, COUNT(*) AS count
+        FROM failed_logins
+        GROUP BY attack_date
+        ORDER BY attack_date
+    """
+    try:
+        rows = await fetch_with_retry(DB_POOL, query)
+        return [{"date": str(row["attack_date"]), "count": row["count"]} for row in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching attack trends: {e}")
+
+
+@app.get("/charts/time-of-day/")
+async def attack_distribution_by_time():
+    query = """
+        SELECT EXTRACT(HOUR FROM timestamp) AS hour, COUNT(*) AS count
+        FROM failed_logins
+        GROUP BY hour
+        ORDER BY hour
+    """
+    try:
+        rows = await fetch_with_retry(DB_POOL, query)
+        # Fill missing hours with 0 counts
+        hour_data = {int(row["hour"]): row["count"] for row in rows}
+        return [{"hour": f"{hour}:00 - {hour + 1}:00", "count": hour_data.get(hour, 0)} for hour in range(24)]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching time of day distribution: {e}")
+
+
 @app.get("/maplogs/", response_model=List[AttackLog])
 async def read_map_logs():
     query = """

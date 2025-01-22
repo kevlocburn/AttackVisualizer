@@ -15,13 +15,13 @@ function App() {
       : "http://127.0.0.1:8000"; // Local development API URL
 
   useEffect(() => {
-    // Fetch initial logs
-    fetch(`${API_BASE_URL}/logs/`)
-      .then((response) => response.json())
-      .then((data) => setLogs(data))
-      .catch((error) => console.error("Error fetching logs:", error));
+    // Fetch initial logs for the Logs component
+    // fetch(`${API_BASE_URL}/logs/`)
+    //   .then((response) => response.json())
+    //   .then((data) => setLogs(data))
+    //   .catch((error) => console.error("Error fetching logs:", error));
 
-    // Fetch initial map logs
+    // Fetch initial map logs for the Map component
     fetch(`${API_BASE_URL}/maplogs/`)
       .then((response) => response.json())
       .then((data) => setMapLogs(data))
@@ -36,17 +36,17 @@ function App() {
 
     ws.onmessage = (event) => {
       const message = JSON.parse(event.data);
-    
+
       if (message.type === "logs") {
         const newLogs = message.data;
-    
-      //  setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 1000)); // Append and limit to 1000 logs
-        setMapLogs((prevMapLogs) => [...newLogs, ...prevMapLogs].slice(0, 100)); // Append and limit to 100 logs
+
+        // Limit logs and map logs to reduce load
+        //setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 1000));
+        setMapLogs((prevMapLogs) => [...newLogs, ...prevMapLogs].slice(0, 100));
       } else if (message.type === "ping") {
         console.log("Keep-alive ping received");
       }
     };
-    
 
     ws.onerror = (error) => {
       console.error("WebSocket error:", error);
@@ -71,7 +71,7 @@ function App() {
           <Logs maplogs={maplogs} highlightIndex={highlightIndex} onLogClick={setHighlightIndex} />
         </div>
         <div className="chart-section">
-          <ChartSection logs={logs} />
+          <ChartSection apiBaseUrl={API_BASE_URL} />
         </div>
       </div>
     </div>
