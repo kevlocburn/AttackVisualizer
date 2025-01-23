@@ -43,6 +43,7 @@ const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
         // If the click is not on a line or marker, reset the highlight
         if (!e.originalEvent.target.closest(".leaflet-interactive")) {
           resetHighlight();
+          resetLineStyles(); // Reset styles for all lines
         }
       });
     }
@@ -102,8 +103,7 @@ const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
 
   // Highlight specific line when `highlightIndex` changes
   useEffect(() => {
-    if (highlightIndex !== null && linesRef.current.length) {
-      // Update styles for all lines
+    if (linesRef.current.length) {
       linesRef.current.forEach((line, index) => {
         if (index === highlightIndex) {
           // Highlight the selected line
@@ -123,6 +123,17 @@ const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
       });
     }
   }, [highlightIndex]);
+
+  // Function to reset all line styles
+  const resetLineStyles = () => {
+    linesRef.current.forEach((line) => {
+      line.setStyle({
+        color: "orange",
+        weight: 3,
+        opacity: 0.7, // Default opacity
+      });
+    });
+  };
 
   return <div id="map" style={{ height: "100%", width: "100%" }}></div>;
 };
