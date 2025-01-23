@@ -6,30 +6,32 @@ on:
     branches:
       - main
 
+env:
+  ACTIONS_STEP_DEBUG: false 
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the Latest Code
       - name: Checkout Code
         uses: actions/checkout@v2
 
-      # Step 2: Add SSH Key for Deployment
       - name: Add SSH Key
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          log-public-key: false
+          log-public-key: false 
 
-      # Step 3: Add Server to Known Hosts
       - name: Add Known Hosts
-        run: ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts
+        run: |
+          echo "::add-mask::${{ secrets.DO_IP }}"
+          ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
-      # Step 4: Pull the Latest Code on the Server
       - name: Pull Latest Code on Server
         run: |
           ssh root@${{ secrets.DO_IP }} << 'EOF'
+          echo "::add-mask::${{ secrets.DO_SSH_PRIVATE_KEY }}"
           if [ ! -d /home/AttackVisualizer ]; then
             git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
           else
@@ -37,24 +39,20 @@ jobs:
           fi
           EOF
 
-      # Step 5: Build Docker Images Locally (With Latest Code)
       - name: Build Docker Images
         run: |
           docker build -t attackvisualizer-frontend:latest -f ./frontend/Dockerfile ./frontend
           docker build -t attackvisualizer-api:latest -f ./backend/Dockerfile.api ./backend
 
-      # Step 6: Save Docker Images Locally
       - name: Save Docker Images
         run: |
           docker save attackvisualizer-frontend:latest | gzip > frontend.tar.gz
           docker save attackvisualizer-api:latest | gzip > api.tar.gz
 
-      # Step 7: Transfer Docker Images to Server
       - name: Transfer Docker Images
         run: |
           scp frontend.tar.gz api.tar.gz root@${{ secrets.DO_IP }}:/root/
 
-      # Step 8: Deploy on Server
       - name: Deploy Docker Images on Server
         env:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -75,6 +73,9 @@ jobs:
           docker-compose down
 
           # Deploy Updated Images
+          echo "::add-mask::${{ secrets.POSTGRES_USER }}"
+          echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
+          echo "::add-mask::${{ secrets.POSTGRES_DB }}"
           POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
