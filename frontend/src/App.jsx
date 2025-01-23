@@ -15,13 +15,13 @@ function App() {
       : "http://127.0.0.1:8000"; // Local development API URL
 
   useEffect(() => {
-    // Fetch initial logs for the Logs component
+        // Fetch initial logs for the Logs component
     // fetch(`${API_BASE_URL}/logs/`)
     //   .then((response) => response.json())
     //   .then((data) => setLogs(data))
     //   .catch((error) => console.error("Error fetching logs:", error));
-
     // Fetch initial map logs for the Map component
+    
     fetch(`${API_BASE_URL}/maplogs/`)
       .then((response) => response.json())
       .then((data) => setMapLogs(data))
@@ -41,7 +41,6 @@ function App() {
         const newLogs = message.data;
 
         // Limit logs and map logs to reduce load
-        //setLogs((prevLogs) => [...newLogs, ...prevLogs].slice(0, 1000));
         setMapLogs((prevMapLogs) => [...newLogs, ...prevMapLogs].slice(0, 100));
       } else if (message.type === "ping") {
         console.log("Keep-alive ping received");
@@ -61,14 +60,28 @@ function App() {
     };
   }, [API_BASE_URL]);
 
+  // Function to reset highlight
+  const resetHighlight = () => {
+    setHighlightIndex(null);
+  };
+
   return (
     <div className="app">
       <div className="map-container">
-        <Map maplogs={maplogs} highlightLog={setHighlightIndex} highlightIndex={highlightIndex} />
+        <Map
+          maplogs={maplogs}
+          highlightLog={setHighlightIndex}
+          highlightIndex={highlightIndex}
+          resetHighlight={resetHighlight} // Pass the resetHighlight function
+        />
       </div>
       <div className="bottom-container">
         <div className="logs-section">
-          <Logs maplogs={maplogs} highlightIndex={highlightIndex} onLogClick={setHighlightIndex} />
+          <Logs
+            maplogs={maplogs}
+            highlightIndex={highlightIndex}
+            onLogClick={setHighlightIndex}
+          />
         </div>
         <div className="chart-section">
           <ChartSection apiBaseUrl={API_BASE_URL} />

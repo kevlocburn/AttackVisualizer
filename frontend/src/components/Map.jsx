@@ -5,7 +5,7 @@ import "leaflet-ant-path";
 
 const serverLocation = [40.8586, -74.1636]; // Server location
 
-const Map = ({ maplogs, highlightLog, highlightIndex }) => {
+const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
   const mapRef = useRef(null); // Reference to the map instance
   const linesRef = useRef([]); // Store lines for highlighting
   const markersRef = useRef([]); // Store markers for cleanup
@@ -37,8 +37,16 @@ const Map = ({ maplogs, highlightLog, highlightIndex }) => {
         fillOpacity: 0.7,
         radius: 30000,
       }).addTo(map);
+
+      // Add a map click listener to reset highlights
+      map.on("click", (e) => {
+        // If the click is not on a line or marker, reset the highlight
+        if (!e.originalEvent.target.closest(".leaflet-interactive")) {
+          resetHighlight();
+        }
+      });
     }
-  }, []);
+  }, [resetHighlight]);
 
   // Update markers and lines when `maplogs` changes
   useEffect(() => {
