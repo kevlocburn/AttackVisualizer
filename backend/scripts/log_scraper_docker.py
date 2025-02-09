@@ -20,7 +20,7 @@ DB_CONFIG = {
 }
 
 # Regex pattern to extract failed login details
-LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: invalid user)? (.*?) from ([\d.]+) port (\d+)"
+LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: (invalid user))? (\S+) from ([\d.]+) port (\d+)"
 
 # Geolocation API
 GEO_API_URL = "http://ip-api.com/json/{ip}"
@@ -39,9 +39,12 @@ def parse_new_logs(last_timestamp):
             for line in file:
                 match = re.search(LOG_PATTERN, line)
                 if match:
-                    print(f"Processing line: {line.strip()}")
-                    logging.debug(f"Processing line: {line.strip()}")
-                    timestamp_str, user, ip_address, port = match.groups()
+                    timestamp_str, invalid_user, user, ip_address, port = match.groups()
+                    
+                    # Normalize username handling
+                    if invalid_user:  # If 'invalid user' exists
+                        user = f"Invalid: {user}"
+                    
                     timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
                         year=datetime.now().year, tzinfo=timezone.utc
                     )
@@ -51,18 +54,18 @@ def parse_new_logs(last_timestamp):
                             "timestamp": timestamp,
                             "ip_address": ip_address,
                             "port": int(port),
+                            "user": user
                         })
-                        print(f"New log entry: {timestamp}, {ip_address}, {port}")
-                        logging.info(f"New log entry: {timestamp}, {ip_address}, {port}")
+                        logging.info(f"New log entry: {timestamp}, {user}, {ip_address}, {port}")
                     else:
-                        print(f"Skipping already processed log entry: {timestamp}, {ip_address}, {port}")
-                        logging.info(f"Skipping already processed log entry: {timestamp}, {ip_address}, {port}")    
+                        logging.info(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")    
                 else:
-                    print(f"No match found in line: {line.strip()}")
-                    logging.debug(f"No match found in line: {line.strip()}")        
+                    logging.debug(f"Skipped line (no match): {line.strip()}")        
     except FileNotFoundError:
-        print(f"Log file not found: {LOG_FILE}")
+        logging.error(f"Log file not found: {LOG_FILE}")
+    
     return parsed_data
+
 
 
 def resolve_geolocation(ip_address):
