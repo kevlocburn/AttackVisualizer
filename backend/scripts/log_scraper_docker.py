@@ -20,7 +20,7 @@ DB_CONFIG = {
 }
 
 # Regex pattern to extract failed login details
-LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: (invalid user))? (\S+) from ([\d.]+) port (\d+)"
+LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?(?:Invalid user (\S+) from ([\d.]+) port (\d+)|Failed password for(?: invalid user)? (\S+) from ([\d.]+) port (\d+))"
 
 # Geolocation API
 GEO_API_URL = "http://ip-api.com/json/{ip}"
