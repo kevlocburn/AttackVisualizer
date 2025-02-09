@@ -71,6 +71,7 @@ def parse_new_logs(last_timestamp):
                     )
 
                     if not last_timestamp or timestamp > last_timestamp:
+                        logging.info(f"New log entry found: {timestamp} - {user} from {ip_address}:{port}")
                         entry = {
                             "timestamp": timestamp,
                             "ip_address": ip_address,
@@ -79,8 +80,8 @@ def parse_new_logs(last_timestamp):
                         }
                         logging.info(f"Extracted log entry: {entry}")
                         parsed_data.append(entry)
-                else:
-                    logging.debug(f"No match found for log line: {line.strip()}")
+                #else:
+                 #   logging.debug(f"No match found for log line: {line.strip()}")
     except FileNotFoundError:
         logging.error(f"Log file not found: {LOG_FILE}")
     except Exception as e:
@@ -190,6 +191,7 @@ if __name__ == "__main__":
     try:
         test_db_connection()
         last_timestamp = get_last_processed_timestamp()
+        logging.info(f"Last processed timestamp: {last_timestamp}")
         new_logs = parse_new_logs(last_timestamp)
 
         logging.info(f"Found {len(new_logs)} new log entries.")
