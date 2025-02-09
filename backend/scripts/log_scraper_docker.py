@@ -20,8 +20,14 @@ DB_CONFIG = {
 }
 
 # Regex pattern to extract failed login details
-LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?(?:Invalid user (\S+) from ([\d.]+) port (\d+)|Failed password for(?: invalid user)? (\S+) from ([\d.]+) port (\d+))"
-
+LOG_PATTERN = (
+    r"^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) "    # e.g. 'Feb  9 20:43:37'
+    r".*?"                                       # skip everything until ...
+    r"(?:Invalid user|Failed password for(?: invalid user)?) "
+    r"(\S+) "                                    # group(2) -> username
+    r"from ([\d.]+) "                            # group(3) -> IP
+    r"port (\d+)"                                # group(4) -> port
+)
 # Geolocation API
 GEO_API_URL = "http://ip-api.com/json/{ip}"
 GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
@@ -32,44 +38,49 @@ CHECK_INTERVAL = 60  # Check every 60 seconds
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def parse_new_logs(last_timestamp):
-    """Parse new entries in the log file after the last processed timestamp."""
     parsed_data = []
+    line_number = 0
+
     try:
         with open(LOG_FILE, "r") as file:
             for line in file:
+                line_number += 1
                 match = re.search(LOG_PATTERN, line)
                 if match:
-                    timestamp_str, user, ip_address, port = match.groups()
-                    print(f"Processing line: {line.strip()}")
+                    timestamp_str = match.group(1)
+                    user = match.group(2)
+                    ip_address = match.group(3)
+                    port = match.group(4)
 
-                    # Normalize username handling (detect invalid users)
+                    # Mark if the line has "invalid user" in it
                     if "invalid user" in line:
-                        user = f"Invalid: {user}"
-                        print(f"Invalid user detected: {user}")
+                        user = f"Invalid:{user}"
 
-                    timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
-                        year=datetime.now().year, tzinfo=timezone.utc
+                    # Convert "Feb  9 20:43:37" -> Python datetime
+                    timestamp = datetime.strptime(
+                        timestamp_str, "%b %d %H:%M:%S"
+                    ).replace(
+                        year=datetime.now().year,
+                        tzinfo=timezone.utc
                     )
 
                     if not last_timestamp or timestamp > last_timestamp:
-                        parsed_data.append({
+                        entry = {
                             "timestamp": timestamp,
                             "ip_address": ip_address,
                             "port": int(port),
                             "user": user
-                        })
-                        logging.info(f"New log entry: {timestamp}, {user}, {ip_address}, {port}")
-                        print(f"New log entry: {timestamp}, {user}, {ip_address}, {port}")
+                        }
+                        parsed_data.append(entry)
+
+                        logging.info(f"New log entry: {entry}")
                     else:
-                        logging.info(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")  
-                        print(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")  
+                        logging.debug(f"Skipping already processed: {timestamp_str}")
                 else:
-                    logging.debug(f"Skipped line (no match): {line.strip()}")    
-                    print(f"Skipped line (no match): {line.strip()}")    
+                    logging.debug(f"No match: {line.strip()}")
     except FileNotFoundError:
-        print(f"Log file not found: {LOG_FILE}")
         logging.error(f"Log file not found: {LOG_FILE}")
-    
+
     return parsed_data
 
 def resolve_geolocation(ip_address):
