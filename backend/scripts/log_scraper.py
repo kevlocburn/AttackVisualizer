@@ -20,7 +20,7 @@ DB_CONFIG = {
 }
 
 # Regex pattern to extract failed login details
-LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: (invalid user))? (\S+) from ([\d.]+) port (\d+)"
+LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: invalid user)? (\S+) from ([\d.]+) port (\d+)"
 
 # Geolocation API
 GEO_API_URL = "http://ip-api.com/json/{ip}"
@@ -35,18 +35,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def parse_new_logs(last_timestamp):
     """Parse new entries in the log file after the last processed timestamp."""
     parsed_data = []
+    line_number = 0
     try:
         with open(LOG_FILE, "r") as file:
             for line in file:
+                line_number += 1
                 match = re.search(LOG_PATTERN, line)
                 if match:
-                    timestamp_str, invalid_user, user, ip_address, port = match.groups()
+                    timestamp_str, user, ip_address, port = match.groups()
                     print(f"Processing line: {line.strip()}")
-                    # Normalize username handling
-                    if invalid_user:  # If 'invalid user' exists
+
+                    # Normalize username handling (detect invalid users)
+                    if "invalid user" in line:
                         user = f"Invalid: {user}"
                         print(f"Invalid user detected: {user}")
-                    
+
                     timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
                         year=datetime.now().year, tzinfo=timezone.utc
                     )
@@ -65,7 +68,7 @@ def parse_new_logs(last_timestamp):
                         print(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")  
                 else:
                     logging.debug(f"Skipped line (no match): {line.strip()}")    
-                    print(f"Skipped line (no match): {line.strip()}")    
+                    print(f"Skipped line (no match): {line_number } { line.strip()} ")    
     except FileNotFoundError:
         print(f"Log file not found: {LOG_FILE}")
         logging.error(f"Log file not found: {LOG_FILE}")
