@@ -39,6 +39,7 @@ def parse_new_logs(last_timestamp):
             for line in file:
                 match = re.search(LOG_PATTERN, line)
                 if match:
+                    print(f"Processing line: {line.strip()}")
                     logging.debug(f"Processing line: {line.strip()}")
                     timestamp_str, user, ip_address, port = match.groups()
                     timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
@@ -51,7 +52,14 @@ def parse_new_logs(last_timestamp):
                             "ip_address": ip_address,
                             "port": int(port),
                         })
+                        print(f"New log entry: {timestamp}, {ip_address}, {port}")
                         logging.info(f"New log entry: {timestamp}, {ip_address}, {port}")
+                    else:
+                        print(f"Skipping already processed log entry: {timestamp}, {ip_address}, {port}")
+                        logging.info(f"Skipping already processed log entry: {timestamp}, {ip_address}, {port}")    
+                else:
+                    print(f"No match found in line: {line.strip()}")
+                    logging.debug(f"No match found in line: {line.strip()}")        
     except FileNotFoundError:
         print(f"Log file not found: {LOG_FILE}")
     return parsed_data
