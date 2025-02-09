@@ -41,10 +41,11 @@ def parse_new_logs(last_timestamp):
                 match = re.search(LOG_PATTERN, line)
                 if match:
                     timestamp_str, invalid_user, user, ip_address, port = match.groups()
-                    
+                    print(f"Processing line: {line.strip()}")
                     # Normalize username handling
                     if invalid_user:  # If 'invalid user' exists
                         user = f"Invalid: {user}"
+                        print(f"Invalid user detected: {user}")
                     
                     timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
                         year=datetime.now().year, tzinfo=timezone.utc
@@ -58,11 +59,15 @@ def parse_new_logs(last_timestamp):
                             "user": user
                         })
                         logging.info(f"New log entry: {timestamp}, {user}, {ip_address}, {port}")
+                        print(f"New log entry: {timestamp}, {user}, {ip_address}, {port}")
                     else:
-                        logging.info(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")    
+                        logging.info(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")  
+                        print(f"Skipping already processed log entry: {timestamp}, {user}, {ip_address}, {port}")  
                 else:
-                    logging.debug(f"Skipped line (no match): {line.strip()}")        
+                    logging.debug(f"Skipped line (no match): {line.strip()}")    
+                    print(f"Skipped line (no match): {line.strip()}")    
     except FileNotFoundError:
+        print(f"Log file not found: {LOG_FILE}")
         logging.error(f"Log file not found: {LOG_FILE}")
     
     return parsed_data
