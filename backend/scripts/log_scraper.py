@@ -5,6 +5,7 @@ import requests
 import time
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+import logging
 
 # Load environment variables from .env
 load_dotenv()
@@ -29,6 +30,7 @@ GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
 LOG_FILE = "/var/log/auth.log"
 CHECK_INTERVAL = 60  # Check every 60 seconds
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def parse_new_logs(last_timestamp):
     """Parse new entries in the log file after the last processed timestamp."""
@@ -49,6 +51,7 @@ def parse_new_logs(last_timestamp):
                             "ip_address": ip_address,
                             "port": int(port),
                         })
+                        logging.info(f"New log entry: {timestamp}, {ip_address}, {port}")
     except FileNotFoundError:
         print(f"Log file not found: {LOG_FILE}")
     return parsed_data
@@ -114,8 +117,9 @@ def insert_into_db(data):
             )
             conn.commit()
             print(f"Inserted entry: {entry}")
-
+            logging.info(f"Inserted entry: {entry}")
         except Exception as e:
+            logging.info(f"Error inserting entry {entry}: {e}")
             print(f"Error inserting entry {entry}: {e}")
             conn.rollback()
 

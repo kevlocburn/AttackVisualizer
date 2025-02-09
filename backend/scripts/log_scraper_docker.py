@@ -5,6 +5,7 @@ import requests
 import time
 from dotenv import load_dotenv
 from datetime import datetime, timezone
+import logging
 
 # Load environment variables from .env
 load_dotenv()
@@ -28,7 +29,7 @@ GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
 # File path and check interval
 LOG_FILE = "/host_var_log/auth.log"
 CHECK_INTERVAL = 60  # Check every 60 seconds
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def parse_new_logs(last_timestamp):
     """Parse new entries in the log file after the last processed timestamp."""
@@ -38,6 +39,7 @@ def parse_new_logs(last_timestamp):
             for line in file:
                 match = re.search(LOG_PATTERN, line)
                 if match:
+                    logging.debug(f"Processing line: {line.strip()}")
                     timestamp_str, user, ip_address, port = match.groups()
                     timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
                         year=datetime.now().year, tzinfo=timezone.utc
@@ -49,6 +51,7 @@ def parse_new_logs(last_timestamp):
                             "ip_address": ip_address,
                             "port": int(port),
                         })
+                        logging.info(f"New log entry: {timestamp}, {ip_address}, {port}")
     except FileNotFoundError:
         print(f"Log file not found: {LOG_FILE}")
     return parsed_data
