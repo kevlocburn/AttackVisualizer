@@ -14,7 +14,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] - %(message)s",
 )
 
-# Load environment variables from .env
+# Load environment variables
 load_dotenv()
 
 # Database connection parameters
@@ -26,10 +26,8 @@ DB_CONFIG = {
     "port": 5432,
 }
 
-# Regex pattern to extract failed login details
-LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: invalid user)? (.*?) from ([\d.]+) port (\d+)"
-GEO_API_URL = "http://ip-api.com/json/{ip}"
-GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
+# Updated regex pattern
+LOG_PATTERN = r"(\w{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?Failed password for(?: invalid user)? (\S*) from ([\d.]+) port (\d+)"
 LOG_FILE = "/var/log/auth.log"
 
 def connect_to_db():
@@ -81,8 +79,10 @@ def parse_new_logs(last_timestamp):
                             "ip_address": ip_address,
                             "port": int(port),
                         })
+                        logging.info(f"Matched log entry: timestamp={timestamp}, user={user}, ip={ip_address}, port={port}")
                 else:
-                    logging.debug(f"No match found for log line: {line.strip()}")
+                    logging.debug(f"Regex failed on line: {line.strip()}")
+
     except FileNotFoundError:
         logging.error(f"Log file not found: {LOG_FILE}")
     except Exception as e:
@@ -91,36 +91,6 @@ def parse_new_logs(last_timestamp):
     logging.info(f"Total parsed log entries: {len(parsed_data)}")
     return parsed_data
 
-def resolve_geolocation(ip_address):
-    """Resolve geolocation information for an IP address with retries."""
-    retries = 3
-    for attempt in range(retries):
-        try:
-            response = requests.get(
-                GEO_API_URL.format(ip=ip_address),
-                params={"fields": GEO_API_FIELDS},
-                timeout=5
-            )
-            if response.ok:
-                data = response.json()
-                if data.get("status") == "success":
-                    return {
-                        "country": data.get("country"),
-                        "region": data.get("regionName"),
-                        "city": data.get("city"),
-                        "latitude": data.get("lat"),
-                        "longitude": data.get("lon"),
-                    }
-            elif response.status_code == 429:
-                logging.warning(f"Rate limited for IP {ip_address}, retrying...")
-                time.sleep(2 ** attempt)
-            else:
-                logging.error(f"Failed API request for IP {ip_address}, Status Code: {response.status_code}")
-                break
-        except Exception as e:
-            logging.error(f"Error resolving geolocation for IP {ip_address}: {e}")
-    return {}
-
 def insert_into_db(data):
     """Insert data into the database."""
     conn = connect_to_db()
@@ -128,24 +98,12 @@ def insert_into_db(data):
 
     for entry in data:
         try:
-            geo_data = resolve_geolocation(entry["ip_address"])
-            time.sleep(1)
-
             sql = """
-            INSERT INTO failed_logins (timestamp, ip_address, port, city, region, country, latitude, longitude)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO failed_logins (timestamp, ip_address, port)
+            VALUES (%s, %s, %s)
             ON CONFLICT (timestamp, ip_address, port) DO NOTHING;
             """
-            values = (
-                entry["timestamp"],
-                entry["ip_address"],
-                entry["port"],
-                geo_data.get("city"),
-                geo_data.get("region"),
-                geo_data.get("country"),
-                geo_data.get("latitude"),
-                geo_data.get("longitude"),
-            )
+            values = (entry["timestamp"], entry["ip_address"], entry["port"])
             logging.info(f"Executing SQL: {sql} with values {values}")
             cursor.execute(sql, values)
 
