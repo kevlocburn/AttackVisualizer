@@ -41,7 +41,7 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: |
-            ssh -o StrictHostKeyChecking=no root@${{ secrets.DO_IP }} << 'EOF'
+            ssh root@${{ secrets.DO_IP }} << 'EOF'
             cd /home/AttackVisualizer
   
             # Pull latest images
