@@ -35,97 +35,108 @@ jobs:
           docker push $IMAGE_API:latest
 
 
-      - name: SSH into Server and Deploy Containers
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.DO_IP }}
-          username: root
-          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          script: |
-            cd /home/AttackVisualizer
+      - name: Deploy Docker Images on Server
+        env:
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        run: |
+          ssh root@${{ secrets.DO_IP }} << 'EOF'
+          cd /home/AttackVisualizer
 
-            # Pull Latest Containers
-            docker pull $IMAGE_FRONTEND:latest
-            docker pull $IMAGE_API:latest
+          # Load Docker Images
+          gunzip -c /root/frontend.tar.gz | docker load
+          gunzip -c /root/api.tar.gz | docker load
 
-            # Stop and Remove Old Containers
-            docker-compose down
+          # Clean up tar.gz files after loading images
+          rm -f /root/frontend.tar.gz /root/api.tar.gz
 
-            # Deploy Updated Containers
-            docker-compose up -d
+          # Bring Down Old Containers
+          docker-compose down
 
-            # Update Nginx Configuration
-            cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
-            server {
-                listen 80;
-                server_name hack.kevinlockburner.com;
+          # Deploy Updated Images
+          echo "::add-mask::${{ secrets.POSTGRES_USER }}"
+          echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
+          echo "::add-mask::${{ secrets.POSTGRES_DB }}"
+          POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+          POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
+          docker-compose up -d
 
-                return 301 https://\$host\$request_uri;
-            }
+          # Configure Global Nginx Settings (Move limit_req_zone Here)
+          cat <<EOL > /etc/nginx/nginx.conf
+          user nginx;
+          worker_processes auto;
+          pid /run/nginx.pid;
 
-            server {
-                listen 443 ssl;
-                server_name hack.kevinlockburner.com;
+          events {
+              worker_connections 1024;
+          }
 
-                ssl_certificate /etc/letsencrypt/live/hack.kevinlockburner.com/fullchain.pem;
-                ssl_certificate_key /etc/letsencrypt/live/hack.kevinlockburner.com/privkey.pem;
+          http {
+              include /etc/nginx/mime.types;
+              default_type application/octet-stream;
+              
+              limit_req_zone \$binary_remote_addr zone=one:10m rate=10r/s;
 
-                ssl_protocols TLSv1.2 TLSv1.3;
-                ssl_ciphers HIGH:!aNULL:!MD5;
-                ssl_prefer_server_ciphers on;
+              sendfile on;
+              keepalive_timeout 65;
+              include /etc/nginx/conf.d/*.conf;
+          }
+          EOL
 
-                # Security Headers
-                add_header X-Frame-Options DENY;
-                add_header X-Content-Type-Options nosniff;
-                add_header X-XSS-Protection "1; mode=block";
-                add_header Content-Security-Policy "default-src 'self'; script-src 'self'; object-src 'none';";
-                
-                # Rate Limiting
-                limit_req_zone \$binary_remote_addr zone=one:10m rate=5r/s;
-                limit_conn_zone \$binary_remote_addr zone=addr:10m;
+          # Configure Site-Specific Nginx Settings
+          cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
+          server {
+              listen 80;
+              server_name hack.kevinlockburner.com;
 
-                location /api/ {
-                    proxy_pass http://localhost:8000/;
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
-                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto \$scheme;
-                    limit_req zone=one burst=10 nodelay;
-                    limit_conn addr 20;
-                }
+              return 301 https://\$host\$request_uri;
+          }
 
-                location /ws/ {
-                    proxy_pass http://localhost:8000;
-                    proxy_http_version 1.1;
-                    proxy_set_header Upgrade \$http_upgrade;
-                    proxy_set_header Connection "upgrade";
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
-                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto \$scheme;
-                }
+          server {
+              listen 443 ssl;
+              server_name hack.kevinlockburner.com;
 
-                location / {
-                    proxy_pass http://localhost:3000/;
-                    proxy_set_header Host \$host;
-                    proxy_set_header X-Real-IP \$remote_addr;
-                    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                    proxy_set_header X-Forwarded-Proto \$scheme;
-                }
+              ssl_certificate /etc/letsencrypt/live/hack.kevinlockburner.com/fullchain.pem;
+              ssl_certificate_key /etc/letsencrypt/live/hack.kevinlockburner.com/privkey.pem;
 
-                # Block sensitive files & paths
-                location ~* \.(env|config|sql|bak|git|svn|log)$ {
-                    deny all;
-                }
+              ssl_protocols TLSv1.2 TLSv1.3;
+              ssl_ciphers HIGH:!aNULL:!MD5;
+              ssl_prefer_server_ciphers on;
 
-                location /wp-admin {
-                    deny all;
-                }
+              location /api/ {
+                  proxy_pass http://localhost:8000/;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+                  
+                  # Rate Limit Requests
+                  limit_req zone=one burst=20 nodelay;
+              }
 
-                location /wp-login.php {
-                    deny all;
-                }
-            }
-            EOL
+              location /ws/ {
+                  proxy_pass http://localhost:8000;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade \$http_upgrade;
+                  proxy_set_header Connection "upgrade";
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
 
-            nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
+              location / {
+                  proxy_pass http://localhost:3000/;
+                  proxy_set_header Host \$host;
+                  proxy_set_header X-Real-IP \$remote_addr;
+                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto \$scheme;
+              }
+          }
+          EOL
+
+          # Restart Nginx
+          nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
+          EOF
