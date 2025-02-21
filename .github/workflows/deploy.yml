@@ -19,7 +19,6 @@ jobs:
       contents: read
       packages: write
 
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2
@@ -96,10 +95,10 @@ jobs:
               default_type application/octet-stream;
 
               # Set up Rate Limiting (Global)
-              limit_req_zone $binary_remote_addr zone=api_rate:10m rate=10r/s;
+              limit_req_zone \$binary_remote_addr zone=api_rate:10m rate=10r/s;
 
               # Block Bad Bots using map (safer than `if`)
-              map $http_user_agent $block_bot {
+              map \$http_user_agent \$block_bot {
                   default 0;
                   "~*python" 1;
                   "~*curl" 1;
@@ -169,7 +168,7 @@ jobs:
                   limit_req zone=api_rate burst=20 nodelay;
 
                   # Block Bad Bots
-                  if ($block_bot) {
+                  if (\$block_bot) {
                       return 403;
                   }
               }
