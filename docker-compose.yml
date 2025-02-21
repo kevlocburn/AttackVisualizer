@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   database:
     image: timescale/timescaledb:latest-pg14
@@ -12,12 +10,8 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     command: >
       bash -c "
         echo 'POSTGRES_USER=${POSTGRES_USER}';
@@ -32,8 +26,7 @@ services:
       dockerfile: Dockerfile.api
     container_name: attack_visualizer_api
     depends_on:
-      database:
-        condition: service_healthy
+      - database
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -43,22 +36,14 @@ services:
     restart: unless-stopped  
     volumes:
       - /var/log:/host_var_log:ro
-    read_only: true  # Prevents API container from being modified
-    tmpfs:
-      - /tmp  # Ensures no writable temp directories
 
   frontend:
     build:
       context: ./frontend
     container_name: attack_visualizer_frontend
-    depends_on:
-      - api
     ports:
       - "3000:80"
     restart: unless-stopped
-    read_only: true  # Prevents frontend container from being modified
-    tmpfs:
-      - /tmp  # Ensures no writable temp directories
 
 volumes:
   pgdata:
