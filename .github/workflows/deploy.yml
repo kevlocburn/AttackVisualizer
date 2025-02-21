@@ -7,7 +7,10 @@ on:
       - main
 
 env:
-  ACTIONS_STEP_DEBUG: false 
+  ACTIONS_STEP_DEBUG: false
+  REGISTRY: ghcr.io
+  IMAGE_FRONTEND: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend
+  IMAGE_API: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api
 
 jobs:
   build-and-deploy:
@@ -17,6 +20,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v2
 
+      - name: Authenticate with GitHub Container Registry (GHCR)
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+      - name: Build and Push Docker Images to GHCR
+        run: |
+          docker build -t $IMAGE_FRONTEND:latest -f ./frontend/Dockerfile ./frontend
+          docker build -t $IMAGE_API:latest -f ./backend/Dockerfile.api ./backend
+          
+          docker push $IMAGE_FRONTEND:latest
+          docker push $IMAGE_API:latest
+
       - name: Add SSH Key
         uses: webfactory/ssh-agent@v0.7.0
         with:
@@ -25,33 +39,17 @@ jobs:
 
       - name: Add Known Hosts
         run: |
-          echo "::add-mask::${{ secrets.DO_IP }}"
           ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Pull Latest Code on Server
         run: |
           ssh root@${{ secrets.DO_IP }} << 'EOF'
-          echo "::add-mask::${{ secrets.DO_SSH_PRIVATE_KEY }}"
           if [ ! -d /home/AttackVisualizer ]; then
             git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
           else
             cd /home/AttackVisualizer && git pull
           fi
           EOF
-
-      - name: Build Docker Images
-        run: |
-          docker build -t attackvisualizer-frontend:latest -f ./frontend/Dockerfile ./frontend
-          docker build -t attackvisualizer-api:latest -f ./backend/Dockerfile.api ./backend
-
-      - name: Save Docker Images
-        run: |
-          docker save attackvisualizer-frontend:latest | gzip > frontend.tar.gz
-          docker save attackvisualizer-api:latest | gzip > api.tar.gz
-
-      - name: Transfer Docker Images
-        run: |
-          scp frontend.tar.gz api.tar.gz root@${{ secrets.DO_IP }}:/root/
 
       - name: Deploy Docker Images on Server
         env:
@@ -62,17 +60,15 @@ jobs:
           ssh root@${{ secrets.DO_IP }} << 'EOF'
           cd /home/AttackVisualizer
 
-          # Load Docker Images
-          gunzip -c /root/frontend.tar.gz | docker load
-          gunzip -c /root/api.tar.gz | docker load
-
-          # Clean up tar.gz files after loading images
-          rm -f /root/frontend.tar.gz /root/api.tar.gz
+          # Authenticate and Pull Latest Docker Images from GHCR
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          docker pull $IMAGE_FRONTEND:latest
+          docker pull $IMAGE_API:latest
 
           # Bring Down Old Containers
           docker-compose down
 
-          # Deploy Updated Images
+          # Deploy Updated Containers
           echo "::add-mask::${{ secrets.POSTGRES_USER }}"
           echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
           echo "::add-mask::${{ secrets.POSTGRES_DB }}"
@@ -81,7 +77,7 @@ jobs:
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
           docker-compose up -d
 
-          # Configure Nginx
+          # Configure Nginx (No Changes)
           cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
           server {
               listen 80;
