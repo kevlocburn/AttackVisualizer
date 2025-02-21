@@ -9,8 +9,8 @@ on:
 env:
   ACTIONS_STEP_DEBUG: false
   REGISTRY: ghcr.io
-  IMAGE_FRONTEND: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend
-  IMAGE_API: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api
+  IMAGE_FRONTEND: ghcr.io/kevlocburn/attackvisualizer-frontend
+  IMAGE_API: ghcr.io/kevlocburn/attackvisualizer-api
 
 jobs:
   build-and-deploy:
@@ -80,9 +80,8 @@ jobs:
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
           docker-compose up -d
 
-          # Global Nginx Configuration
+          # Global Nginx Configuration (Rate Limit & Bot Blocking)
           cat <<EOL > /etc/nginx/nginx.conf
-          user nginx;
           worker_processes auto;
           pid /run/nginx.pid;
 
@@ -97,7 +96,7 @@ jobs:
               # Set up Rate Limiting (Global)
               limit_req_zone \$binary_remote_addr zone=api_rate:10m rate=10r/s;
 
-              # Block Bad Bots using map (safer than `if`)
+              # Block Bad Bots using `map` (better than `if`)
               map \$http_user_agent \$block_bot {
                   default 0;
                   "~*python" 1;
@@ -132,10 +131,12 @@ jobs:
               ssl_ciphers HIGH:!aNULL:!MD5;
               ssl_prefer_server_ciphers on;
 
-              # Prevent Clickjacking, XSS, and Injection Attacks
+              # Security Headers
               add_header X-Frame-Options DENY;
               add_header X-XSS-Protection "1; mode=block";
               add_header X-Content-Type-Options nosniff;
+              add_header Referrer-Policy no-referrer;
+              add_header Permissions-Policy "geolocation=(), microphone=(), camera=()";
               add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'; script-src 'self'; object-src 'none';";
 
               # Block Direct Server Access (Allow Only Cloudflare)
@@ -171,17 +172,6 @@ jobs:
                   if (\$block_bot) {
                       return 403;
                   }
-              }
-
-              location /ws/ {
-                  proxy_pass http://localhost:8000;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection "upgrade";
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto https;
               }
 
               location / {
