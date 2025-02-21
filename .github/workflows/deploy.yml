@@ -140,11 +140,12 @@ jobs:
               add_header Content-Security-Policy "
                   default-src 'self';
                   frame-ancestors 'none';
-                  script-src 'self' https://static.cloudflareinsights.com https://{s}.basemaps.cartocdn.com;
+                  script-src 'self' https://static.cloudflareinsights.com https://a.basemaps.cartocdn.com https://b.basemaps.cartocdn.com https://c.basemaps.cartocdn.com https://d.basemaps.cartocdn.com;
                   style-src 'self' 'unsafe-inline';
-                  img-src 'self' https://{s}.basemaps.cartocdn.com data:;
+                  img-src 'self' data: https://a.basemaps.cartocdn.com https://b.basemaps.cartocdn.com https://c.basemaps.cartocdn.com https://d.basemaps.cartocdn.com;
                   object-src 'none';
               ";
+
 
 
               # Block Direct Server Access (Allow Only Cloudflare)
