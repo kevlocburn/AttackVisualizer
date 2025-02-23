@@ -119,25 +119,19 @@ def read_map_logs():
     try:
         cursor = conn.cursor()
         cursor.execute("""
-            WITH ranked_entries AS (
-                SELECT 
-                    ip_address, 
-                    timestamp, 
-                    port, 
-                    city, 
-                    region, 
-                    country, 
-                    latitude, 
-                    longitude,
-                    ROW_NUMBER() OVER (PARTITION BY city ORDER BY timestamp DESC) AS rank
-                FROM failed_logins
-                WHERE city IS NOT NULL
-            )
-            SELECT ip_address, timestamp, port, city, region, country, latitude, longitude
-            FROM ranked_entries
-            WHERE rank <= 2
-            ORDER BY timestamp DESC
-            LIMIT 100;
+            SELECT DISTINCT ON (city) 
+            ip_address, 
+            timestamp, 
+            port, 
+            city, 
+            region, 
+            country, 
+            latitude, 
+            longitude
+        FROM failed_logins
+        WHERE city IS NOT NULL
+        ORDER BY city, timestamp DESC
+        LIMIT 100;
         """)
         rows = cursor.fetchall()
         maplogs = [

@@ -14,3 +14,5 @@ CREATE TABLE failed_logins (
 
 CREATE INDEX idx_ip_address ON failed_logins (ip_address);
 CREATE INDEX idx_timestamp ON failed_logins (timestamp);
+CREATE INDEX idx_city_timestamp ON failed_logins (city, timestamp DESC);
+CREATE INDEX idx_ip_address ON failed_logins (ip_address);
