@@ -1,4 +1,10 @@
-CREATE TABLE failed_logins (
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';
+
+SELECT pg_reload_conf();
+
+CREATE TABLE IF NOT EXISTS failed_logins (
     id SERIAL PRIMARY KEY,
     timestamp TIMESTAMPTZ NOT NULL,
     ip_address VARCHAR(45) NOT NULL,
@@ -12,7 +18,7 @@ CREATE TABLE failed_logins (
     CONSTRAINT unique_failed_login UNIQUE (timestamp, ip_address, port)
 );
 
-CREATE INDEX idx_ip_address ON failed_logins (ip_address);
-CREATE INDEX idx_timestamp ON failed_logins (timestamp);
-CREATE INDEX idx_city_timestamp ON failed_logins (city, timestamp DESC);
-CREATE INDEX idx_ip_address ON failed_logins (ip_address);
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_ip_address ON failed_logins (ip_address);
+CREATE INDEX IF NOT EXISTS idx_timestamp ON failed_logins (timestamp);
+CREATE INDEX IF NOT EXISTS idx_city_timestamp ON failed_logins (city, timestamp DESC);

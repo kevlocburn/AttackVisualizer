@@ -17,8 +17,10 @@ services:
         echo 'POSTGRES_USER=${POSTGRES_USER}';
         echo 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}';
         echo 'POSTGRES_DB=${POSTGRES_DB}';
+        echo \"shared_preload_libraries = 'pg_stat_statements'\" >> /var/lib/postgresql/data/postgresql.conf;
         exec docker-entrypoint.sh postgres
       "
+
 
   api:
     build:
