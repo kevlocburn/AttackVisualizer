@@ -18,8 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends cron nano \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Ensure Python is in PATH and create cron log file
+RUN echo "export PATH=/usr/local/bin:\$PATH" >> ~/.profile && \
+    touch /var/log/cron.log && chmod 0666 /var/log/cron.log
+
 # Add cron job for log scraper
-RUN echo "*/10 * * * * POSTGRES_USER=${POSTGRES_USER} POSTGRES_PASSWORD=${POSTGRES_PASSWORD} POSTGRES_DB=${POSTGRES_DB} python3 /app/scripts/log_scraper_docker.py >> /var/log/log_scraper_docker.log 2>&1" > /etc/cron.d/log_scraper_docker \
+RUN echo "*/10 * * * * root /usr/local/bin/python3 /app/scripts/log_scraper_docker.py >> /var/log/log_scraper_docker.log 2>&1" > /etc/cron.d/log_scraper_docker \
     && chmod 0644 /etc/cron.d/log_scraper_docker
 
 # Apply cron job
@@ -28,5 +32,5 @@ RUN crontab /etc/cron.d/log_scraper_docker
 # Expose FastAPI port
 EXPOSE 8000
 
-# Command to start cron and FastAPI server
-CMD ["sh", "-c", "cron && uvicorn api:app --host 0.0.0.0 --port 8000"]
+# Start both cron and FastAPI server properly
+CMD ["sh", "-c", "cron && tail -f /var/log/cron.log & uvicorn api:app --host 0.0.0.0 --port 8000"]

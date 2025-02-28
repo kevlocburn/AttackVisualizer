@@ -7,99 +7,95 @@ from dotenv import load_dotenv
 from datetime import datetime, timezone
 import logging
 
-# Load environment variables
+# Load environment variables from .env
 load_dotenv()
 
-# Database configuration
+# Database connection parameters
 DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
-    "host": "timescaledb",
+    "host": "127.0.0.1",
     "port": 5432,
 }
 
-# Log file location
-LOG_FILE = "/host_var_log/auth.log"
-
-# Regex pattern for failed SSH logins
-LOG_PATTERN = re.compile(
-    r"^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) .*? (?:Invalid user|Failed password for(?: invalid user)?) (\S+) from ([\d.]+) port (\d+)"
+# Regex pattern to extract failed login details
+LOG_PATTERN = (
+    r"^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) "    # e.g. 'Feb  9 20:43:37'
+    r".*?"                                       # skip everything until ...
+    r"(?:Invalid user|Failed password for(?: invalid user)?) "
+    r"(\S+) "                                    # group(2) -> username
+    r"from ([\d.]+) "                            # group(3) -> IP
+    r"port (\d+)"                                # group(4) -> port
 )
-
 # Geolocation API
 GEO_API_URL = "http://ip-api.com/json/{ip}"
 GEO_API_FIELDS = "status,country,regionName,city,lat,lon"
 
-# Cache for IP lookups (avoid duplicate API calls)
-ip_cache = {}
+# File path and check interval
+LOG_FILE = "/host_var_log/auth.log"
+CHECK_INTERVAL = 60  # Check every 60 seconds
 
-# Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# File to store last processed line
-LAST_LINE_FILE = "/tmp/last_line_processed.txt"
-
-def get_last_processed_line():
-    """Retrieve the last processed line number."""
-    try:
-        with open(LAST_LINE_FILE, "r") as f:
-            return int(f.read().strip())
-    except FileNotFoundError:
-        return 0
-
-def set_last_processed_line(line_number):
-    """Store the last processed line number."""
-    with open(LAST_LINE_FILE, "w") as f:
-        f.write(str(line_number))
-
-def parse_new_logs():
-    """Parse new log lines and return failed login attempts."""
+def parse_new_logs(last_timestamp):
     parsed_data = []
-    last_line_number = get_last_processed_line()
+    line_number = 0
 
     try:
         with open(LOG_FILE, "r") as file:
-            lines = file.readlines()
-            for i, line in enumerate(lines):
-                if i < last_line_number:
-                    continue  # Skip already processed lines
-
-                match = LOG_PATTERN.search(line)
+            for line in file:
+                line_number += 1
+                match = re.search(LOG_PATTERN, line)
                 if match:
-                    timestamp_str, user, ip_address, port = match.groups()
-                    timestamp = datetime.strptime(timestamp_str, "%b %d %H:%M:%S").replace(
-                        year=datetime.now().year, tzinfo=timezone.utc
+                    timestamp_str = match.group(1)
+                    user = match.group(2)
+                    ip_address = match.group(3)
+                    port = match.group(4)
+
+                    # Mark if the line has "invalid user" in it
+                    if "invalid user" in line:
+                        user = f"Invalid:{user}"
+
+                    # Convert "Feb  9 20:43:37" -> Python datetime
+                    timestamp = datetime.strptime(
+                        timestamp_str, "%b %d %H:%M:%S"
+                    ).replace(
+                        year=datetime.now().year,
+                        tzinfo=timezone.utc
                     )
-                    
-                    # Cache the IP lookup
-                    geo_data = ip_cache.get(ip_address) or resolve_geolocation(ip_address)
-                    ip_cache[ip_address] = geo_data
 
-                    entry = {
-                        "timestamp": timestamp,
-                        "ip_address": ip_address,
-                        "port": int(port),
-                        "city": geo_data.get("city"),
-                        "region": geo_data.get("region"),
-                        "country": geo_data.get("country"),
-                        "latitude": geo_data.get("latitude"),
-                        "longitude": geo_data.get("longitude"),
-                    }
-                    parsed_data.append(entry)
+                    if not last_timestamp or timestamp > last_timestamp:
+                        entry = {
+                            "timestamp": timestamp,
+                            "ip_address": ip_address,
+                            "port": int(port),
+                            "user": user
+                        }
+                        parsed_data.append(entry)
 
-            set_last_processed_line(len(lines))  # Store the last processed line
+                        logging.info(f"New log entry: {entry}")
+                    else:
+                        logging.debug(f"Skipping already processed: {timestamp_str}")
+                else:
+                    logging.debug(f"No match: {line.strip()}")
     except FileNotFoundError:
         logging.error(f"Log file not found: {LOG_FILE}")
 
     return parsed_data
+
+
 
 def resolve_geolocation(ip_address):
     """Resolve geolocation information for an IP address with retries."""
     retries = 3
     for attempt in range(retries):
         try:
-            response = requests.get(GEO_API_URL.format(ip=ip_address), params={"fields": GEO_API_FIELDS}, timeout=5)
+            response = requests.get(
+                GEO_API_URL.format(ip=ip_address),
+                params={"fields": GEO_API_FIELDS},
+                timeout=5
+            )
             if response.ok:
                 data = response.json()
                 if data.get("status") == "success":
@@ -111,52 +107,79 @@ def resolve_geolocation(ip_address):
                         "longitude": data.get("lon"),
                     }
             elif response.status_code == 429:
-                logging.warning(f"Rate limited for IP {ip_address}, retrying...")
+                print(f"Rate limited for IP {ip_address}, retrying...")
                 time.sleep(2 ** attempt)
             else:
-                logging.error(f"Failed API request for IP {ip_address}, Status Code: {response.status_code}")
+                print(f"Failed API request for IP {ip_address}, Status Code: {response.status_code}")
                 break
         except Exception as e:
-            logging.error(f"Error resolving geolocation for IP {ip_address}: {e}")
+            print(f"Error resolving geolocation for IP {ip_address}: {e}")
     return {}
 
-def insert_into_db(data):
-    """Batch insert data into the database."""
-    if not data:
-        return
 
+def insert_into_db(data):
+    """Insert data into the database."""
     conn = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
-    
-    try:
-        cursor.executemany(
-            """
-            INSERT INTO failed_logins (timestamp, ip_address, port, city, region, country, latitude, longitude)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (timestamp, ip_address, port) DO NOTHING;
-            """,
-            [(entry["timestamp"], entry["ip_address"], entry["port"], entry["city"], entry["region"], entry["country"], entry["latitude"], entry["longitude"]) for entry in data]
-        )
-        conn.commit()
-        logging.info(f"Inserted {len(data)} new log entries into the database.")
-    except Exception as e:
-        logging.error(f"Database insertion error: {e}")
-        conn.rollback()
-    finally:
-        cursor.close()
-        conn.close()
+
+    for entry in data:
+        try:
+            geo_data = resolve_geolocation(entry["ip_address"])
+            time.sleep(1)
+
+            cursor.execute(
+                """
+                INSERT INTO failed_logins (timestamp, ip_address, port, city, region, country, latitude, longitude)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (timestamp, ip_address, port) DO NOTHING;
+                """,
+                (
+                    entry["timestamp"],
+                    entry["ip_address"],
+                    entry["port"],
+                    geo_data.get("city"),
+                    geo_data.get("region"),
+                    geo_data.get("country"),
+                    geo_data.get("latitude"),
+                    geo_data.get("longitude"),
+                ),
+            )
+            conn.commit()
+            print(f"Inserted entry: {entry}")
+            logging.info(f"Inserted entry: {entry}")
+        except Exception as e:
+            logging.info(f"Error inserting entry {entry}: {e}")
+            print(f"Error inserting entry {entry}: {e}")
+            conn.rollback()
+
+    cursor.close()
+    conn.close()
+
+
+def get_last_processed_timestamp():
+    """Retrieve the most recent timestamp processed."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    cursor.execute("SELECT MAX(timestamp) FROM failed_logins;")
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    return result[0].replace(tzinfo=timezone.utc) if result[0] else None
+
 
 if __name__ == "__main__":
-    logging.info("Starting log scraper...")
+    print("Starting log scraper...")
 
     try:
-        new_logs = parse_new_logs()
-        logging.info(f"Found {len(new_logs)} new log entries.")
+        last_timestamp = get_last_processed_timestamp()
+        new_logs = parse_new_logs(last_timestamp)
+        print(f"Found {len(new_logs)} new log entries.")
 
         if new_logs:
             insert_into_db(new_logs)
+            print(f"Inserted {len(new_logs)} new entries into the database.")
 
     except Exception as e:
-        logging.error(f"Error: {e}")
+        print(f"Error: {e}")
 
-    logging.info("Log scraper completed.")
+    print("Log scraper completed.")
