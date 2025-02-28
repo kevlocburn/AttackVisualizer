@@ -72,6 +72,7 @@ jobs:
           docker pull $IMAGE_API:latest
           # Bring Down Old Containers
           docker-compose down
+          docker image prune -f
           # Deploy Updated Containers
           echo "::add-mask::${{ secrets.POSTGRES_USER }}"
           echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
