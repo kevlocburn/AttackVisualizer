@@ -15,7 +15,7 @@ DB_CONFIG = {
     "dbname": os.getenv("POSTGRES_DB"),
     "user": os.getenv("POSTGRES_USER"),
     "password": os.getenv("POSTGRES_PASSWORD"),
-    "host": "127.0.0.1",
+    "host": "timescaledb",
     "port": 5432,
 }
 
