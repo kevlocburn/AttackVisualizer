@@ -40,6 +40,11 @@ jobs:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
           log-public-key: false 
 
+      - name: Debug SSH Connectivity
+        run: |
+          echo "Testing SSH connection..."
+          ssh -o StrictHostKeyChecking=no -v root@${{ secrets.DO_IP }} exit
+        
       - name: Add Known Hosts
         run: |
           ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts || echo "Warning: Unable to scan SSH host key"
