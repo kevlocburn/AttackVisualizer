@@ -58,6 +58,8 @@ jobs:
             cd /home/AttackVisualizer && git pull
           fi
           EOF
+
+
       - name: Deploy Docker Images on Server
         env:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
@@ -70,6 +72,9 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
           docker pull $IMAGE_FRONTEND:latest
           docker pull $IMAGE_API:latest
+          # Remove Old Images
+          docker rmi $(docker images -q $IMAGE_FRONTEND:latest)
+          docker rmi $(docker images -q $IMAGE_API:latest)
           # Bring Down Old Containers
           docker-compose down
           docker image prune -f
@@ -124,3 +129,4 @@ jobs:
           EOL
           nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
           EOF
+...
