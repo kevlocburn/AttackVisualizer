@@ -41,8 +41,10 @@ jobs:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
           log-public-key: false 
 
+      
       - name: Add Known Hosts
-        run: ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+        run: |
+          ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: Pull Latest Code on Server
         run: |
