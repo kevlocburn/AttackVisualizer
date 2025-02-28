@@ -19,7 +19,6 @@ jobs:
       contents: read
       packages: write
 
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v2
@@ -34,6 +33,7 @@ jobs:
           
           docker push $IMAGE_FRONTEND:latest
           docker push $IMAGE_API:latest
+
       - name: Add SSH Key
         uses: webfactory/ssh-agent@v0.7.0
         with:
@@ -44,21 +44,20 @@ jobs:
         run: |
           echo "Testing SSH connection..."
           ssh -o StrictHostKeyChecking=no -v root@${{ secrets.DO_IP }} exit
-        
+
       - name: Add Known Hosts
         run: |
           ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts || echo "Warning: Unable to scan SSH host key"
-        
-      - name: Pull Latest Code on Server
-        run: |
-          ssh root@${{ secrets.DO_IP }} << 'EOF'
-          if [ ! -d /home/AttackVisualizer ]; then
-            git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
-          else
-            cd /home/AttackVisualizer && git pull
-          fi
-          EOF
 
+      # - name: Pull Latest Code on Server
+      #   run: |
+      #     ssh root@${{ secrets.DO_IP }} << 'EOF'
+      #     if [ ! -d /home/AttackVisualizer ]; then
+      #       git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
+      #     else
+      #       cd /home/AttackVisualizer && git pull
+      #     fi
+      #     EOF
 
       - name: Deploy Docker Images on Server
         env:
@@ -68,25 +67,32 @@ jobs:
         run: |
           ssh root@${{ secrets.DO_IP }} << 'EOF'
           cd /home/AttackVisualizer
-          # Authenticate and Pull Latest Docker Images from GHCR
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+
+          # Stop and remove old containers
+          docker ps -q --filter "name=attack_visualizer_api" | grep -q . && docker stop attack_visualizer_api && docker rm attack_visualizer_api || true
+          docker ps -q --filter "name=attack_visualizer_frontend" | grep -q . && docker stop attack_visualizer_frontend && docker rm attack_visualizer_frontend || true
+
+          # Pull new images
           docker pull $IMAGE_FRONTEND:latest
           docker pull $IMAGE_API:latest
-          # Remove Old Images
-          docker rmi $(docker images -q $IMAGE_FRONTEND:latest)
-          docker rmi $(docker images -q $IMAGE_API:latest)
-          # Bring Down Old Containers
-          docker-compose down
+
+          # Remove old images if they exist
           docker image prune -f
-          # Deploy Updated Containers
+          docker rmi $(docker images -q ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api) || true
+          docker rmi $(docker images -q ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend) || true
+
+          # Deploy updated containers with Docker Compose
           echo "::add-mask::${{ secrets.POSTGRES_USER }}"
           echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
           echo "::add-mask::${{ secrets.POSTGRES_DB }}"
+          
           POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
-          docker-compose up -d
-          # Configure Nginx 
+          docker-compose pull && docker-compose up -d --force-recreate
+
+          # Configure Nginx
           cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
           server {
               listen 80;
@@ -129,4 +135,3 @@ jobs:
           EOL
           nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
           EOF
-...
