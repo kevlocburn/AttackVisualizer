@@ -89,8 +89,8 @@ jobs:
           server {
               listen 443 ssl;
               server_name hack.kevinlockburner.com;
-              ssl_certificate /etc/letsencrypt/live/hack.kevinlockburner.com/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/hack.kevinlockburner.com/privkey.pem;
+              ssl_certificate /etc/letsencrypt/live/unified-certificate/fullchain.pem;  
+              ssl_certificate_key /etc/letsencrypt/live/unified-certificate/privkey.pem;
               ssl_protocols TLSv1.2 TLSv1.3;
               ssl_ciphers HIGH:!aNULL:!MD5;
               ssl_prefer_server_ciphers on;
