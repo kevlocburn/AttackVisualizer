@@ -58,10 +58,10 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: |
-          ssh root@${{ secrets.DO_IP }} << 'EOF'
+          ssh root@${{ secrets.DO_IP }} << EOF
           cd /home/AttackVisualizer
           # Authenticate and Pull Latest Docker Images from GHCR
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           # Remove Old Containers and Images
           docker-compose down
           docker system prune -af
@@ -72,15 +72,12 @@ jobs:
           docker images $IMAGE_FRONTEND:latest
           docker images $IMAGE_API:latest
           # Deploy Updated Containers
-          echo "::add-mask::${{ secrets.POSTGRES_USER }}"
-          echo "::add-mask::${{ secrets.POSTGRES_PASSWORD }}"
-          echo "::add-mask::${{ secrets.POSTGRES_DB }}"
           POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
           POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
           docker-compose up -d
           # Configure Nginx 
-          cat <<EOL > /etc/nginx/conf.d/attackvisualizer.conf
+          cat <<'EOL' > /etc/nginx/conf.d/attackvisualizer.conf
           server {
               listen 80;
               server_name hack.kevinlockburner.com;
