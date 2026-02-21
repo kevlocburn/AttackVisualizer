@@ -58,12 +58,14 @@ def parse_new_logs(last_timestamp):
                         user = f"Invalid:{user}"
 
                     # Convert "Feb  9 20:43:37" -> Python datetime
-                    timestamp = datetime.strptime(
-                        timestamp_str, "%b %d %H:%M:%S"
-                    ).replace(
-                        year=datetime.now().year,
-                        tzinfo=timezone.utc
-                    )
+                    parsed_date = datetime.strptime(timestamp_str, "%b %d %H:%M:%S")
+                    now = datetime.now()
+                    year = now.year
+                    # If log month is December but we're in early months of a new year,
+                    # treat the entry as belonging to the previous year.
+                    if parsed_date.month == 12 and now.month < 6:
+                        year -= 1
+                    timestamp = parsed_date.replace(year=year, tzinfo=timezone.utc)
 
                     if not last_timestamp or timestamp > last_timestamp:
                         entry = {
