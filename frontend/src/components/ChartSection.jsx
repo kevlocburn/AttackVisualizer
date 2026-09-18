@@ -11,6 +11,7 @@ import {
   LineElement,
   PointElement, // Ensure this is registered
 } from "chart.js";
+import Spinner from "./Spinner";
 
 ChartJS.register(
   BarElement,
@@ -104,14 +105,17 @@ const ChartSection = ({ apiBaseUrl }) => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
       <div>
-        <h2>Total Failed Logins: {totalFailedLogins}</h2>
+        <h2>
+          Total Failed Logins:{" "}
+          {totalFailedLogins !== null ? totalFailedLogins : <Spinner inline size={18} />}
+        </h2>
       </div>
       <div>
         <h3>Top Attack Sources (Country)</h3>
         {topCountriesData ? (
           <Bar data={topCountriesData} options={{ responsive: true }} />
         ) : (
-          <p>Loading...</p>
+          <Spinner label="Loading chart..." />
         )}
       </div>
       <div>
@@ -119,7 +123,7 @@ const ChartSection = ({ apiBaseUrl }) => {
         {attackTrendsData ? (
           <Line data={attackTrendsData} options={{ responsive: true }} />
         ) : (
-          <p>Loading...</p>
+          <Spinner label="Loading chart..." />
         )}
       </div>
       <div>
@@ -130,7 +134,7 @@ const ChartSection = ({ apiBaseUrl }) => {
             options={{ responsive: true, indexAxis: "y" }}
           />
         ) : (
-          <p>Loading...</p>
+          <Spinner label="Loading chart..." />
         )}
       </div>
     </div>

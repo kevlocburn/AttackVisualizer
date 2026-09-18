@@ -1,0 +1,35 @@
+/* Spinner.css */
+.spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 20px;
+}
+
+.spinner {
+  display: inline-block;
+  vertical-align: middle;
+  border: 4px solid rgba(255, 204, 0, 0.2);
+  border-top-color: #ffcc00;
+  border-radius: 50%;
+  animation: spinner-rotate 0.8s linear infinite;
+}
+
+.spinner-label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #ccc;
+  text-align: center;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -2,10 +2,12 @@ import React, { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-ant-path";
+import Spinner from "./Spinner";
+import "./Map.css";
 
 const serverLocation = [40.8586, -74.1636]; // Server location
 
-const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
+const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight, isLoading }) => {
   const mapRef = useRef(null); // Reference to the map instance
   const linesRef = useRef([]); // Store lines for highlighting
   const markersRef = useRef([]); // Store markers for cleanup
@@ -145,7 +147,16 @@ const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
     });
   };
 
-  return <div id="map" style={{ height: "100%", width: "100%" }}></div>;
+  return (
+    <div className="map-wrapper">
+      <div id="map" style={{ height: "100%", width: "100%" }}></div>
+      {isLoading && (
+        <div className="map-loading-overlay">
+          <Spinner label="Loading attack data..." />
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Map;

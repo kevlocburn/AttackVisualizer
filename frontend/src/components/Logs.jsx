@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
+import Spinner from "./Spinner";
 import "./Logs.css";
 
-const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
+const Logs = ({ maplogs, highlightIndex, onLogClick, isLoading }) => {
   const logRefs = useRef([]);
 
   useEffect(() => {
@@ -23,7 +24,9 @@ const Logs = ({ maplogs, highlightIndex, onLogClick }) => {
     <div className="logs">
       <h2>Last 100 Attack Logs</h2>
       <div className="log-list">
-        {maplogs && maplogs.length > 0 ? (
+        {isLoading ? (
+          <Spinner label="Loading logs..." />
+        ) : maplogs && maplogs.length > 0 ? (
           maplogs.map((log, index) => (
             <div
               key={index}

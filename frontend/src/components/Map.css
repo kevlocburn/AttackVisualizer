@@ -1,0 +1,17 @@
+/* Map.css */
+.map-wrapper {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.map-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000; /* above leaflet's panes/controls */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(28, 28, 28, 0.6);
+  pointer-events: none;
+}

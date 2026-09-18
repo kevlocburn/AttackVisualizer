@@ -8,6 +8,7 @@ function App() {
   const [logs, setLogs] = useState([]);
   const [maplogs, setMapLogs] = useState([]);
   const [highlightIndex, setHighlightIndex] = useState(null);
+  const [isMapLogsLoading, setIsMapLogsLoading] = useState(true);
 
   const API_BASE_URL =
     process.env.NODE_ENV === "production"
@@ -25,7 +26,8 @@ function App() {
     fetch(`${API_BASE_URL}/maplogs/`)
       .then((response) => response.json())
       .then((data) => setMapLogs(data))
-      .catch((error) => console.error("Error fetching map logs:", error));
+      .catch((error) => console.error("Error fetching map logs:", error))
+      .finally(() => setIsMapLogsLoading(false));
 
     // Connect to WebSocket for real-time updates
     const ws = new WebSocket(
@@ -73,6 +75,7 @@ function App() {
           highlightLog={setHighlightIndex}
           highlightIndex={highlightIndex}
           resetHighlight={resetHighlight} // Pass the resetHighlight function
+          isLoading={isMapLogsLoading}
         />
       </div>
       <div className="bottom-container">
@@ -81,6 +84,7 @@ function App() {
             maplogs={maplogs}
             highlightIndex={highlightIndex}
             onLogClick={setHighlightIndex}
+            isLoading={isMapLogsLoading}
           />
         </div>
         <div className="chart-section">
