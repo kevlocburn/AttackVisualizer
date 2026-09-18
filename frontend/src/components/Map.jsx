@@ -25,10 +25,15 @@ const Map = ({ maplogs, highlightLog, highlightIndex, resetHighlight }) => {
 
       mapRef.current = map;
 
-      // Add tile layer
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: "© OpenStreetMap contributors © CARTO",
-      }).addTo(map);
+      // Add tile layer (Esri dark basemap - free, no API key required)
+      L.tileLayer(
+        "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution:
+            "© OpenStreetMap contributors, © Esri — Esri, HERE, Garmin, FAO, NOAA, USGS",
+          maxZoom: 16,
+        }
+      ).addTo(map);
 
       // Add server marker
       L.circle(serverLocation, {
