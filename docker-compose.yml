@@ -6,8 +6,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    # Loopback only: Docker's port publishing bypasses ufw, so "5432:5432" exposed
+    # Postgres to the internet. Containers reach it as "timescaledb" on the compose
+    # network; host scripts via 127.0.0.1. Remote access: ssh -L 5432:127.0.0.1:5432
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -19,9 +22,6 @@ services:
       retries: 5
     command: >
       bash -c "
-        echo 'POSTGRES_USER=${POSTGRES_USER}';
-        echo 'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}';
-        echo 'POSTGRES_DB=${POSTGRES_DB}';
         echo \"shared_preload_libraries = 'pg_stat_statements'\" >> /var/lib/postgresql/data/postgresql.conf;
         exec docker-entrypoint.sh postgres
       "
@@ -37,7 +37,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"   # nginx-only; see database ports comment
     restart: always  
     volumes:
       - /var/log:/host_var_log:ro
@@ -46,7 +46,7 @@ services:
     image: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend:latest
     container_name: attack_visualizer_frontend
     ports:
-      - "3000:80"
+      - "127.0.0.1:3000:80"     # nginx-only; see database ports comment
     restart: always
 
 volumes:
