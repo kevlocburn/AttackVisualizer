@@ -23,9 +23,12 @@ DB_CONFIG = {
 LOG_PATTERN = (
     r"^(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}) "    # e.g. 'Feb  9 20:43:37'
     r".*?"                                       # skip everything until ...
-    r"(?:Invalid user|Failed password for(?: invalid user)?) "
+    # SSH is key-only now, so attempts on real accounts (e.g. root) no longer log
+    # "Failed password"; they log "Connection closed by authenticating user root
+    # 1.2.3.4 port N [preauth]" instead — note no "from" before the IP.
+    r"(?:Invalid user|Failed password for(?: invalid user)?|Connection closed by authenticating user) "
     r"(\S+) "                                    # group(2) -> username
-    r"from ([\d.]+) "                            # group(3) -> IP
+    r"(?:from )?([\d.]+) "                       # group(3) -> IP
     r"port (\d+)"                                # group(4) -> port
 )
 # Geolocation API
