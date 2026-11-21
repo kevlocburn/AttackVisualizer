@@ -6,116 +6,140 @@ on:
     branches:
       - main
 
+# One deploy at a time; never cancel one halfway through.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write # push to GHCR + prune old versions
+
 env:
-  ACTIONS_STEP_DEBUG: false
-  REGISTRY: ghcr.io
   IMAGE_FRONTEND: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend
   IMAGE_API: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api
+  DROPLET: 159.65.37.6
+  APP_DIR: /home/AttackVisualizer
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v7
 
-      - name: Authenticate with GitHub Container Registry (GHCR)
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u $GITHUB_ACTOR --password-stdin
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
 
-      - name: Build and Push Docker Images to GHCR
-        run: |
-          docker build -t $IMAGE_FRONTEND:latest -f ./frontend/Dockerfile ./frontend
-          docker build -t $IMAGE_API:latest -f ./backend/Dockerfile.api ./backend
-          
-          docker push $IMAGE_FRONTEND:latest
-          docker push $IMAGE_API:latest
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # :<sha> is what gets deployed (exact, rollback-able); :latest is a
+      # convenience for local `docker compose up`. provenance/sbom off = one
+      # manifest per tag, so pruning old versions is safe.
+      - name: Build and push frontend
+        uses: docker/build-push-action@v7
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
+            ${{ env.IMAGE_FRONTEND }}:latest
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Build and push API
+        uses: docker/build-push-action@v7
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile.api
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_API }}:${{ github.sha }}
+            ${{ env.IMAGE_API }}:latest
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
       - name: Add SSH Key
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          log-public-key: false 
+          log-public-key: false
 
-      - name: Add Known Hosts
+      # Pinned host key (secret DO_KNOWN_HOSTS), not ssh-keyscan — keyscan trusts
+      # whatever answers on that IP.
+      - name: Pin droplet host key
+        env:
+          KNOWN_HOSTS: ${{ secrets.DO_KNOWN_HOSTS }}
         run: |
-          ssh-keyscan -H ${{ secrets.DO_IP }} >> ~/.ssh/known_hosts 2>/dev/null
-      - name: Pull Latest Code on Server
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      # The server needs only these two files — no git checkout, so no GitHub
+      # credential lives on the droplet.
+      - name: Copy compose files to server
         run: |
-          ssh root@${{ secrets.DO_IP }} << 'EOF'
-          if [ ! -d /home/AttackVisualizer ]; then
-            git clone git@github.com:kevlocburn/AttackVisualizer.git /home/AttackVisualizer
-          else
-            cd /home/AttackVisualizer && git pull
-          fi
-          EOF
-      - name: Deploy Docker Images on Server
+          ssh root@"$DROPLET" "mkdir -p '$APP_DIR/database'"
+          scp docker-compose.yml root@"$DROPLET":"$APP_DIR/docker-compose.yml"
+          scp database/init.sql root@"$DROPLET":"$APP_DIR/database/init.sql"
+
+      # .env is written from secrets over stdin (never on a command line) and
+      # records IMAGE_TAG, so a manual `docker compose up -d` on the box keeps
+      # running this exact build instead of drifting to :latest.
+      - name: Write .env on server
         env:
           POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: |
-          ssh root@${{ secrets.DO_IP }} << EOF
-          cd /home/AttackVisualizer
-          # Authenticate and Pull Latest Docker Images from GHCR
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          # Remove Old Containers and Images
-          docker-compose down
-          docker system prune -af
-          # Pull Latest Docker Images
-          docker pull $IMAGE_FRONTEND:latest
-          docker pull $IMAGE_API:latest
-          # Verify Image IDs
-          docker images $IMAGE_FRONTEND:latest
-          docker images $IMAGE_API:latest
-          # Deploy Updated Containers
-          POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
-          POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
-          docker-compose up -d
-          # Configure Nginx 
-          cat <<'EOL' > /etc/nginx/conf.d/attackvisualizer.conf
-          server {
-              listen 80;
-              server_name hack.kevinlockburner.com;
-              return 301 https://\$host\$request_uri;
-          }
-          server {
-              listen 443 ssl;
-              server_name hack.kevinlockburner.com;
-              ssl_certificate /etc/letsencrypt/live/unified-certificate/fullchain.pem;  
-              ssl_certificate_key /etc/letsencrypt/live/unified-certificate/privkey.pem;
-              ssl_protocols TLSv1.2 TLSv1.3;
-              ssl_ciphers HIGH:!aNULL:!MD5;
-              ssl_prefer_server_ciphers on;
-              location /api/ {
-                  proxy_pass http://localhost:8000/;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-              location /ws/ {
-                  proxy_pass http://localhost:8000/;
-                  proxy_http_version 1.1;
-                  proxy_set_header Upgrade \$http_upgrade;
-                  proxy_set_header Connection "upgrade";
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-              location / {
-                  proxy_pass http://localhost:3000/;
-                  proxy_set_header Host \$host;
-                  proxy_set_header X-Real-IP \$remote_addr;
-                  proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                  proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-          }
-          EOL
-          nginx -t && systemctl reload nginx || (echo "Nginx reload failed"; exit 1)
-          EOF
+          printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\nIMAGE_TAG=%s\n' \
+            "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB" "$GITHUB_SHA" \
+            | ssh root@"$DROPLET" "umask 077 && cat > '$APP_DIR/.env'"
+
+      # Containers only. nginx (hack.kevinlockburner.com vhost, TLS) is owned by
+      # kevlocburn/digital-ocean-infra; this app's contract is 127.0.0.1:3000
+      # (frontend) and 127.0.0.1:8000 (api, also /ws/). `up -d` recreates only
+      # services whose image/config changed — the database keeps running.
+      - name: Deploy on server
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          printf '%s' "$GH_TOKEN" | ssh root@"$DROPLET" "docker login ghcr.io -u '$ACTOR' --password-stdin"
+          ssh root@"$DROPLET" "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
+          set -euo pipefail
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          cd "$APP_DIR"
+          docker compose pull api frontend
+          docker compose up -d --remove-orphans
+          docker compose ps --format '{{.Name}} {{.Image}} {{.Status}}'
+          REMOTE
+
+      # Keep the newest 10 versions of each image; never fails the deploy.
+      - name: Prune old frontend versions
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
+        with:
+          package-name: attackvisualizer/attackvisualizer-frontend
+          package-type: container
+          min-versions-to-keep: 10
+
+      - name: Prune old API versions
+        uses: actions/delete-package-versions@v5
+        continue-on-error: true
+        with:
+          package-name: attackvisualizer/attackvisualizer-api
+          package-type: container
+          min-versions-to-keep: 10
