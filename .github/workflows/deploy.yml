@@ -19,7 +19,6 @@ env:
   IMAGE_FRONTEND: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend
   IMAGE_API: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api
   DROPLET: 159.65.37.6
-  APP_DIR: /home/AttackVisualizer
 
 jobs:
   build-and-deploy:
@@ -72,60 +71,23 @@ jobs:
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
 
-      - name: Add SSH Key
-        uses: webfactory/ssh-agent@v0.10.0
-        with:
-          ssh-private-key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
-          log-public-key: false
-
-      # Pinned host key (secret DO_KNOWN_HOSTS), not ssh-keyscan — keyscan trusts
-      # whatever answers on that IP.
-      - name: Pin droplet host key
+      # Restricted deploy: DEPLOY_SSH_KEY can only run `app-deploy attackvisualizer <sha>` on
+      # the droplet (forced command, set up by kevlocburn/digital-ocean-infra —
+      # which also owns how the container runs and the nginx in front of it).
+      # The script pulls this exact sha using the token on stdin, health-checks
+      # it, and rolls back automatically if it is unhealthy (this step fails).
+      - name: Deploy
         env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.DO_KNOWN_HOSTS }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-
-      # The server needs only these two files — no git checkout, so no GitHub
-      # credential lives on the droplet.
-      - name: Copy compose files to server
-        run: |
-          ssh root@"$DROPLET" "mkdir -p '$APP_DIR/database'"
-          scp docker-compose.yml root@"$DROPLET":"$APP_DIR/docker-compose.yml"
-          scp database/init.sql root@"$DROPLET":"$APP_DIR/database/init.sql"
-
-      # .env is written from secrets over stdin (never on a command line) and
-      # records IMAGE_TAG, so a manual `docker compose up -d` on the box keeps
-      # running this exact build instead of drifting to :latest.
-      - name: Write .env on server
-        env:
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-        run: |
-          printf 'POSTGRES_USER=%s\nPOSTGRES_PASSWORD=%s\nPOSTGRES_DB=%s\nIMAGE_TAG=%s\n' \
-            "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$POSTGRES_DB" "$GITHUB_SHA" \
-            | ssh root@"$DROPLET" "umask 077 && cat > '$APP_DIR/.env'"
-
-      # Containers only. nginx (hack.kevinlockburner.com vhost, TLS) is owned by
-      # kevlocburn/digital-ocean-infra; this app's contract is 127.0.0.1:3000
-      # (frontend) and 127.0.0.1:8000 (api, also /ws/). `up -d` recreates only
-      # services whose image/config changed — the database keeps running.
-      - name: Deploy on server
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ACTOR: ${{ github.actor }}
-        run: |
-          printf '%s' "$GH_TOKEN" | ssh root@"$DROPLET" "docker login ghcr.io -u '$ACTOR' --password-stdin"
-          ssh root@"$DROPLET" "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
-          set -euo pipefail
-          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
-          cd "$APP_DIR"
-          docker compose pull api frontend
-          docker compose up -d --remove-orphans
-          docker compose ps --format '{{.Name}} {{.Image}} {{.Status}}'
-          REMOTE
+          printf '%s' "$GH_TOKEN" | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
+            -o BatchMode=yes deploy@"$DROPLET" "$GITHUB_SHA"
 
       # Keep the newest 10 versions of each image; never fails the deploy.
       - name: Prune old frontend versions

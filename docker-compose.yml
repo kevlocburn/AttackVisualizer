@@ -27,7 +27,7 @@ services:
       "
 
   api:
-    image: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api:latest
     container_name: attack_visualizer_api
     depends_on:
       database:
@@ -43,7 +43,7 @@ services:
       - /var/log:/host_var_log:ro
 
   frontend:
-    image: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend:latest
     container_name: attack_visualizer_frontend
     ports:
       - "127.0.0.1:3000:80"     # nginx-only; see database ports comment

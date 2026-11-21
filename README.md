@@ -22,7 +22,7 @@ This project is designed to monitor and visualize attacks on a server in real-ti
 
 - **.github/**: CI/CD setup.
   - **workflows/**: GitHub Actions workflows.
-    - **deploy.yml**: Deployment configuration.
+    - **deploy.yml**: Builds both images, pushes `:<git-sha>` tags to GHCR, and deploys via a restricted SSH key (see Deployment below).
 
 ## Setup Instructions
 
@@ -72,3 +72,16 @@ Contributions are welcome! Please open an issue or submit a pull request for any
 ## License
 
 This project is licensed under the MIT License.
+
+## Deployment
+
+Push to `main` → `.github/workflows/deploy.yml` builds the frontend and API images, pushes
+`ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-{frontend,api}:<git-sha>` (+ `:latest`), then runs
+`ssh deploy@<droplet> <sha>` with a key that can only run `app-deploy attackvisualizer <sha>`. That
+script pulls the exact sha, `docker compose up -d` (TimescaleDB keeps running), health-checks the
+frontend and API, and rolls back automatically if either is unhealthy.
+
+The **server's** compose file (ports, volumes, project name) and nginx live in the private
+infrastructure repo; the `docker-compose.yml` here is for local development. The Postgres
+credentials live in `.env` on the server only.
+
