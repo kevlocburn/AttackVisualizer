@@ -75,7 +75,7 @@ This project is licensed under the MIT License.
 
 ## Deployment
 
-Push to `main` → `.github/workflows/deploy.yml` builds the frontend and API images, pushes
+Push to `main` → `.github/workflows/deploy.yml` (shared pipeline [kevlocburn/app-pipeline](https://github.com/kevlocburn/app-pipeline)) builds the frontend and API images, pushes
 `ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-{frontend,api}:<git-sha>` (+ `:latest`), then runs
 `ssh deploy@<droplet> <sha>` with a key that can only run `app-deploy attackvisualizer <sha>`. That
 script pulls the exact sha, `docker compose up -d` (TimescaleDB keeps running), health-checks the

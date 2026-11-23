@@ -6,102 +6,23 @@ on:
     branches:
       - main
 
-# One deploy at a time; never cancel one halfway through.
-concurrency:
-  group: deploy
-  cancel-in-progress: false
-
 permissions:
   contents: read
   packages: write # push to GHCR + prune old versions
 
-env:
-  IMAGE_FRONTEND: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-frontend
-  IMAGE_API: ghcr.io/kevlocburn/attackvisualizer/attackvisualizer-api
-  DROPLET: 159.65.37.6
-
+# Build -> deploy -> prune via the shared pipeline (kevlocburn/app-pipeline).
+# The deploy key can only run `app-deploy attackvisualizer <sha>` on the server, which pulls
+# that exact sha, health-checks it and rolls back automatically if unhealthy.
+# How the app runs on the server (ports, volumes, nginx) is in the infra repo.
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v7
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # :<sha> is what gets deployed (exact, rollback-able); :latest is a
-      # convenience for local `docker compose up`. provenance/sbom off = one
-      # manifest per tag, so pruning old versions is safe.
-      - name: Build and push frontend
-        uses: docker/build-push-action@v7
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          provenance: false
-          sbom: false
-          tags: |
-            ${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
-            ${{ env.IMAGE_FRONTEND }}:latest
-          labels: org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=frontend
-          cache-to: type=gha,mode=max,scope=frontend
-
-      - name: Build and push API
-        uses: docker/build-push-action@v7
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile.api
-          push: true
-          provenance: false
-          sbom: false
-          tags: |
-            ${{ env.IMAGE_API }}:${{ github.sha }}
-            ${{ env.IMAGE_API }}:latest
-          labels: org.opencontainers.image.revision=${{ github.sha }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
-
-      # Restricted deploy: DEPLOY_SSH_KEY can only run `app-deploy attackvisualizer <sha>` on
-      # the droplet (forced command, set up by kevlocburn/digital-ocean-infra —
-      # which also owns how the container runs and the nginx in front of it).
-      # The script pulls this exact sha using the token on stdin, health-checks
-      # it, and rolls back automatically if it is unhealthy (this step fails).
-      - name: Deploy
-        env:
-          DEPLOY_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          KNOWN_HOSTS: ${{ secrets.DO_KNOWN_HOSTS }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          install -d -m 700 ~/.ssh
-          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
-          printf '%s' "$GH_TOKEN" | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes \
-            -o BatchMode=yes deploy@"$DROPLET" "$GITHUB_SHA"
-
-      # Keep the newest 10 versions of each image; never fails the deploy.
-      - name: Prune old frontend versions
-        uses: actions/delete-package-versions@v5
-        continue-on-error: true
-        with:
-          package-name: attackvisualizer/attackvisualizer-frontend
-          package-type: container
-          min-versions-to-keep: 10
-
-      - name: Prune old API versions
-        uses: actions/delete-package-versions@v5
-        continue-on-error: true
-        with:
-          package-name: attackvisualizer/attackvisualizer-api
-          package-type: container
-          min-versions-to-keep: 10
+  pipeline:
+    uses: kevlocburn/app-pipeline/.github/workflows/deploy.yml@main
+    with:
+      app: attackvisualizer
+      images: |
+        [{"name": "attackvisualizer/attackvisualizer-frontend", "context": "frontend"},
+         {"name": "attackvisualizer/attackvisualizer-api", "context": "backend", "file": "backend/Dockerfile.api"}]
+    secrets:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DO_KNOWN_HOSTS: ${{ secrets.DO_KNOWN_HOSTS }}
