@@ -30,7 +30,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000", 
-        "https://hack.kevinlockburner.com"
+        "https://hack.kevinlockburner.com",
+        # kevinlockburner.com shows the live count from /logs/count/.
+        "https://kevinlockburner.com",
+        "https://www.kevinlockburner.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
