@@ -11,7 +11,7 @@ function App() {
   const [isMapLogsLoading, setIsMapLogsLoading] = useState(true);
 
   const API_BASE_URL =
-    process.env.NODE_ENV === "production"
+    import.meta.env.PROD
       ? "https://hack.kevinlockburner.com/api" // Production API URL
       : "http://127.0.0.1:8000"; // Local development API URL
 
@@ -31,7 +31,7 @@ function App() {
 
     // Connect to WebSocket for real-time updates
     const ws = new WebSocket(
-      process.env.NODE_ENV === "production"
+      import.meta.env.PROD
         ? "wss://hack.kevinlockburner.com/ws/maplogs"
         : "ws://127.0.0.1:8000/ws/maplogs"
     );

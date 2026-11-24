@@ -1,12 +1,12 @@
 # Use Node.js image to build the frontend
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 
 # Set working directory
 WORKDIR /app
 
 # Copy package.json and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy the rest of the app source code
 COPY . .
@@ -16,7 +16,7 @@ RUN npm run build
 
 # Use Nginx to serve the built app
 FROM nginx:alpine
-COPY --from=build /app/build /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 
 # Expose port 80 for Nginx
 EXPOSE 80

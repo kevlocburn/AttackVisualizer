@@ -1,13 +1,5 @@
-FastAPI
-SQLAlchemy
-pandas
-geopy
+fastapi
 uvicorn[standard]
-aiofiles
+psycopg2-binary
 python-dotenv
 requests
-psycopg2-binary
-datetime
-aioredis
-asyncpg
-redis
