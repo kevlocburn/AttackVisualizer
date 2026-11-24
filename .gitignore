@@ -72,3 +72,5 @@ pgdata/
 *.sublime-syntax
 *.sublime-scheme
 *.sublime-build
+# Vite build output
+dist/
